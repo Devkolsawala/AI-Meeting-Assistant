@@ -4,7 +4,13 @@ import prettier from "eslint-config-prettier";
 
 export default tseslint.config(
   {
-    ignores: ["**/dist/**", "**/node_modules/**", "**/.turbo/**"],
+    ignores: [
+      "**/dist/**",
+      "**/node_modules/**",
+      "**/.turbo/**",
+      "**/.next/**",
+      "**/next-env.d.ts",
+    ],
   },
   {
     files: ["**/*.{js,cjs,mjs,ts,tsx,mts,cts}"],

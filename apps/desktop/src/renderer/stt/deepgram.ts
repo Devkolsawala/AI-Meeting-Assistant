@@ -6,7 +6,7 @@ import type {
 } from "@meetcopilot/shared";
 
 const DEEPGRAM_LISTEN_URL = "wss://api.deepgram.com/v1/listen";
-const DEFAULT_TOKEN_ENDPOINT = "http://127.0.0.1:8787/token/deepgram";
+const DEFAULT_TOKEN_ENDPOINT = "http://127.0.0.1:8787/stt-token";
 const DEEPGRAM_MODEL = "nova-3";
 const TARGET_SAMPLE_RATE = 16000;
 const CHANNEL_COUNT = 2;
@@ -184,7 +184,7 @@ export class DeepgramSttAdapter implements SpeechToTextAdapter {
     const endpoint = this.options.tokenEndpoint ?? DEFAULT_TOKEN_ENDPOINT;
     this.log("Deepgram", `requesting short-lived token from ${endpoint}`);
 
-    const res = await fetch(endpoint, { method: "GET" });
+    const res = await fetch(endpoint, { method: "POST" });
     if (!res.ok) {
       throw new Error(`Deepgram token request failed with HTTP ${res.status}`);
     }

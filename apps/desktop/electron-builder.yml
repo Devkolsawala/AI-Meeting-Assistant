@@ -1,0 +1,21 @@
+appId: com.meetcopilot.desktop
+productName: MeetCopilot
+directories:
+  output: release
+# The renderer loads an AudioWorklet by URL; serving app files from disk (no asar)
+# avoids archive edge cases for that and keeps packaging simple.
+asar: false
+files:
+  - dist/**
+  - package.json
+# Registers the meetcopilot:// scheme with the OS at install time so the browser
+# can hand the PKCE auth code back to the app via the deep link.
+protocols:
+  - name: MeetCopilot
+    schemes:
+      - meetcopilot
+win:
+  target: nsis
+nsis:
+  oneClick: true
+  perMachine: false

@@ -23,6 +23,36 @@ export interface SttTranscriptEvent {
 /** Callback used by speech-to-text adapters for partial and final transcripts. */
 export type SttTranscriptHandler = (event: SttTranscriptEvent) => void;
 
+/** Model routing lane. Fast = Nova/Haiku; smart = Sonnet. Decided server-side. */
+export type InferLane = "fast" | "smart";
+
+/** One labelled line of meeting transcript sent to the backend for inference. */
+export interface InferContextLine {
+  /** Who spoke: "you" (local mic) or "them" (meeting audio). */
+  speaker: SpeakerChannel;
+  /** Transcript text for this line. */
+  text: string;
+}
+
+/** Request body for POST /infer. Provider/model keys never appear here. */
+export interface InferRequest {
+  /** Labelled transcript context, oldest first. */
+  context: InferContextLine[];
+  /** Preferred lane. The server may override; defaults to "fast". */
+  lane?: InferLane;
+  /** Persona key to apply (injected server-side). Used from Milestone 6. */
+  persona?: string;
+}
+
+/**
+ * SSE payloads streamed from POST /infer. Each `data:` line is JSON of this shape,
+ * except the terminal message which is the literal `[DONE]`.
+ */
+export interface InferStreamDelta {
+  /** Next chunk of generated answer text. */
+  delta: string;
+}
+
 /** Minimal provider-agnostic speech-to-text adapter contract. */
 export interface SpeechToTextAdapter {
   /** Start the provider connection and begin streaming audio. */

@@ -1,0 +1,80 @@
+:root {
+  color-scheme: light dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  line-height: 1.5;
+}
+
+main {
+  max-width: 26rem;
+  margin: 0 auto;
+  padding: 4rem 1.5rem;
+}
+
+.btn {
+  display: inline-block;
+  width: 100%;
+  padding: 0.6rem 1rem;
+  margin: 0.35rem 0;
+  font: inherit;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.btn-primary {
+  border-color: transparent;
+  background: #2563eb;
+  color: #fff;
+}
+
+.divider {
+  text-align: center;
+  margin: 1rem 0;
+  opacity: 0.6;
+  font-size: 0.85rem;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.form input {
+  padding: 0.6rem 0.75rem;
+  font: inherit;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+}
+
+.message {
+  margin-top: 1rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  font-size: 0.9rem;
+}
+
+.link,
+a {
+  color: #2563eb;
+}

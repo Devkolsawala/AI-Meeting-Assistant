@@ -19,6 +19,18 @@
           &#10005;
         </button>
       </header>
+      <section class="account" aria-label="Account">
+        <div class="account-row">
+          <span id="auth-dot" class="status-dot" aria-hidden="true"></span>
+          <span id="auth-status">Signed out</span>
+        </div>
+        <div class="account-actions">
+          <button id="signin-btn" class="capture-btn capture-btn-primary" type="button">
+            Sign in
+          </button>
+          <button id="signout-btn" class="capture-btn" type="button" disabled>Sign out</button>
+        </div>
+      </section>
       <section class="capture" aria-label="Audio capture">
         <div class="capture-actions">
           <button id="start-capture-btn" class="capture-btn capture-btn-primary" type="button">
@@ -43,6 +55,15 @@
           <span id="stt-status" class="transcript-status">STT: idle</span>
         </div>
         <div id="transcript-lines" class="transcript-lines" aria-live="polite"></div>
+      </section>
+      <section class="answer" aria-label="AI answer">
+        <div class="answer-header">
+          <span>Answer</span>
+          <button id="ask-btn" class="capture-btn capture-btn-primary" type="button">
+            Ask (Ctrl+Enter)
+          </button>
+        </div>
+        <div id="answer-text" class="answer-text" aria-live="polite"></div>
       </section>
       <main id="log" class="log" aria-live="polite"></main>
       <footer class="hint">Drag the title bar to move &bull; Invisible to screen capture</footer>

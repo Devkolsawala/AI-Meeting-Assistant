@@ -5,6 +5,12 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Next.js (apps/web)
+.next/
+
+# Electron packaging output (apps/desktop)
+release/
+
 # Turborepo
 .turbo/
 

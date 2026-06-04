@@ -2,18 +2,21 @@
   "name": "@meetcopilot/desktop",
   "version": "0.0.0",
   "private": true,
+  "description": "MeetCopilot desktop overlay (Electron).",
+  "author": "MeetCopilot",
   "type": "module",
   "main": "dist/main.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/bundle-main.mjs && node scripts/copy-assets.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "start": "electron ."
-  },
-  "dependencies": {
-    "@meetcopilot/shared": "workspace:*"
+    "start": "electron .",
+    "package": "pnpm run build && electron-builder"
   },
   "devDependencies": {
+    "@meetcopilot/shared": "workspace:*",
     "@types/node": "^24.12.4",
-    "electron": "^42.3.2"
+    "electron": "^42.3.2",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.24.2"
   }
 }

@@ -1,4 +1,5 @@
-import type { SpeechToTextAdapter, SttTranscriptEvent } from "@meetcopilot/shared";
+import type { InferContextLine, SpeechToTextAdapter, SttTranscriptEvent } from "@meetcopilot/shared";
+import { initAuthUi } from "./auth-ui.js";
 import { createSttAdapter } from "./stt/factory.js";
 
 const logEl = document.getElementById("log");
@@ -12,11 +13,18 @@ const youDotEl = document.getElementById("you-dot");
 const themDotEl = document.getElementById("them-dot");
 const sttStatusEl = document.getElementById("stt-status");
 const transcriptLinesEl = document.getElementById("transcript-lines");
+const answerTextEl = document.getElementById("answer-text");
+const askBtn = document.getElementById("ask-btn");
 
 const api = window.meetcopilot;
 const audioRmsThreshold = 0.01;
 const monitorIntervalMs = 250;
 const maxTranscriptLines = 80;
+const maxContextLines = 40;
+
+/** Finalised transcript lines, labelled, sent to /infer when the user asks. */
+const transcriptContext: InferContextLine[] = [];
+let isAsking = false;
 
 type CaptureSide = "You" | "Them";
 type CaptureStatus = "idle" | "pending" | "active" | "error";
@@ -195,6 +203,40 @@ function removePartialTranscriptLines(): void {
 function clearTranscript(): void {
   partialTranscriptLines.clear();
   transcriptLinesEl?.replaceChildren();
+  transcriptContext.length = 0;
+}
+
+function setAnswer(text: string, state: "" | "pending" | "error" = ""): void {
+  if (!answerTextEl) return;
+  answerTextEl.textContent = text;
+  answerTextEl.dataset.state = state;
+}
+
+function appendAnswer(text: string): void {
+  if (!answerTextEl) return;
+  // The first delta replaces the "Thinking…" placeholder.
+  if (answerTextEl.dataset.state) {
+    answerTextEl.textContent = "";
+    answerTextEl.dataset.state = "";
+  }
+  answerTextEl.textContent += text;
+  answerTextEl.scrollTop = answerTextEl.scrollHeight;
+}
+
+async function runAsk(): Promise<void> {
+  if (isAsking) return;
+  isAsking = true;
+  const button = asButton(askBtn);
+  if (button) button.disabled = true;
+  setAnswer("Thinking…", "pending");
+
+  const result = await api.infer.run(transcriptContext.slice(-maxContextLines));
+  if (!result.ok && result.error && result.error !== "cancelled") {
+    setAnswer(result.error, "error");
+  }
+
+  isAsking = false;
+  if (button) button.disabled = false;
 }
 
 function pruneTranscriptLines(): void {
@@ -229,6 +271,11 @@ function handleTranscript(event: SttTranscriptEvent): void {
     line.className = "transcript-line transcript-line-final";
     setTranscriptLineText(line, side, transcript);
     transcriptLinesEl.appendChild(line);
+
+    transcriptContext.push({ speaker: event.speaker, text: transcript });
+    if (transcriptContext.length > maxContextLines) {
+      transcriptContext.splice(0, transcriptContext.length - maxContextLines);
+    }
   } else {
     let line = partialTranscriptLines.get(side);
     if (!line) {
@@ -345,6 +392,12 @@ if (labelEl) {
 }
 
 api.onLog((entry) => appendLog(entry.label, entry.value));
+initAuthUi(appendLog);
+
+api.infer.onDelta((text) => appendAnswer(text));
+api.infer.onError((error) => setAnswer(error, "error"));
+api.infer.onHotkey(() => void runAsk());
+askBtn?.addEventListener("click", () => void runAsk());
 startCaptureBtn?.addEventListener("click", () => {
   void startCapture();
 });
