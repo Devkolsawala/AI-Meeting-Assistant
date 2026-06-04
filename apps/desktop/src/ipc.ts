@@ -1,3 +1,5 @@
+import type { SttProvider } from "@meetcopilot/shared";
+
 /**
  * IPC contract shared between the Electron main process, the preload bridge, and
  * the renderer. Keeping channel names and payload shapes in one place keeps the
@@ -20,6 +22,8 @@ export interface StatusEntry {
 export interface MeetCopilotApi {
   /** Human-readable app name. */
   readonly appName: string;
+  /** Active speech-to-text provider, selected via the STT_PROVIDER env var. */
+  readonly sttProvider: SttProvider;
   /** Subscribe to status/log entries pushed from the main process. */
   onLog: (handler: (entry: StatusEntry) => void) => void;
   /** Ask the main process to quit the app. */

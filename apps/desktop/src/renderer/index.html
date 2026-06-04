@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self';"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src http://127.0.0.1:8787 ws://127.0.0.1:8787 wss://api.deepgram.com wss://api.elevenlabs.io; worker-src 'self';"
     />
     <title>MeetCopilot Overlay</title>
     <link rel="stylesheet" href="styles.css" />
@@ -19,6 +19,31 @@
           &#10005;
         </button>
       </header>
+      <section class="capture" aria-label="Audio capture">
+        <div class="capture-actions">
+          <button id="start-capture-btn" class="capture-btn capture-btn-primary" type="button">
+            Start capture
+          </button>
+          <button id="stop-capture-btn" class="capture-btn" type="button" disabled>Stop</button>
+        </div>
+        <div class="capture-status">
+          <div class="capture-row">
+            <span id="you-dot" class="status-dot" aria-hidden="true"></span>
+            <span id="you-status">You: idle</span>
+          </div>
+          <div class="capture-row">
+            <span id="them-dot" class="status-dot" aria-hidden="true"></span>
+            <span id="them-status">Them: idle</span>
+          </div>
+        </div>
+      </section>
+      <section class="transcript" aria-label="Live transcript">
+        <div class="transcript-header">
+          <span>Live transcript</span>
+          <span id="stt-status" class="transcript-status">STT: idle</span>
+        </div>
+        <div id="transcript-lines" class="transcript-lines" aria-live="polite"></div>
+      </section>
       <main id="log" class="log" aria-live="polite"></main>
       <footer class="hint">Drag the title bar to move &bull; Invisible to screen capture</footer>
     </div>

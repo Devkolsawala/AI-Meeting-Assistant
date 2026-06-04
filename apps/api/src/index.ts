@@ -1,8 +1,10 @@
+import type { Server } from "node:http";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { APP_NAME } from "@meetcopilot/shared";
 import { loadEnv, MissingEnvError } from "./env.js";
+import { attachSarvamProxy, SARVAM_PROXY_PATH } from "./sarvam-proxy.js";
 import { mintDeepgramToken, mintElevenLabsToken, UpstreamError } from "./tokens.js";
 
 loadEnv();
@@ -35,9 +37,12 @@ app.onError((err, c) => {
   return c.json({ error: "Internal server error" }, 500);
 });
 
-serve({ fetch: app.fetch, hostname: HOST, port: PORT }, (info) => {
+const server = serve({ fetch: app.fetch, hostname: HOST, port: PORT }, (info) => {
   console.log(`[${APP_NAME}] token server listening on http://${HOST}:${info.port}`);
   console.log("  GET /health");
   console.log("  GET /token/deepgram");
   console.log("  GET /token/elevenlabs");
+  console.log(`  WS  ${SARVAM_PROXY_PATH} (Sarvam saaras:v3 proxy)`);
 });
+
+attachSarvamProxy(server as Server);
