@@ -21,12 +21,18 @@ export function OverlayMockup() {
 
         {/* Participant tiles */}
         <div className="grid grid-cols-2 gap-2 bg-zinc-100 p-2 sm:gap-3 sm:p-3">
-          <div className="relative aspect-video overflow-hidden rounded-xl bg-gradient-to-br from-sky-200 to-indigo-300">
+          <div className="relative grid aspect-video place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-sky-200 to-indigo-300">
+            <span className="grid h-14 w-14 place-items-center rounded-full bg-white/30 text-lg font-semibold text-indigo-900/80 ring-2 ring-white/40 backdrop-blur">
+              AR
+            </span>
             <div className="absolute bottom-2 left-2 rounded-md bg-black/40 px-2 py-0.5 text-[11px] font-medium text-white">
               Them
             </div>
           </div>
-          <div className="relative aspect-video overflow-hidden rounded-xl bg-gradient-to-br from-emerald-200 to-teal-300">
+          <div className="relative grid aspect-video place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-emerald-200 to-teal-300">
+            <span className="grid h-14 w-14 place-items-center rounded-full bg-white/30 text-lg font-semibold text-teal-900/80 ring-2 ring-white/40 backdrop-blur">
+              You
+            </span>
             <div className="absolute bottom-2 left-2 rounded-md bg-black/40 px-2 py-0.5 text-[11px] font-medium text-white">
               You
             </div>

@@ -139,8 +139,23 @@ export default function HomePage() {
 
       <main className="m-0 block w-full max-w-none p-0">
         {/* Hero */}
-        <section className="relative overflow-hidden bg-gradient-to-b from-sky-100 via-blue-50 to-white">
-          <div className="mx-auto max-w-6xl px-5 pb-28 pt-20 text-center sm:pt-24">
+        <section className="relative overflow-hidden bg-gradient-to-b from-sky-300 via-sky-100 to-white">
+          {/* cool blue glow up top */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 -z-0 h-[560px] bg-[radial-gradient(circle_at_50%_-15%,rgba(37,99,235,0.30),transparent_60%)]"
+          />
+          {/* warm sunrise glow along the horizon, behind the mockup */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 -z-0 h-[460px] bg-[radial-gradient(ellipse_70%_60%_at_50%_118%,rgba(251,146,60,0.38),rgba(253,224,71,0.20)_42%,transparent_72%)]"
+          />
+          {/* faint dot grid, fading out toward the horizon */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 -z-0 [background-image:radial-gradient(rgba(15,23,42,0.05)_1px,transparent_1px)] [background-size:24px_24px] [mask-image:linear-gradient(to_bottom,black,transparent_70%)]"
+          />
+          <div className="relative z-10 mx-auto max-w-6xl px-5 pb-28 pt-20 text-center sm:pt-24">
             <div className="mx-auto max-w-3xl">
               <span className="inline-flex items-center gap-2 rounded-full border border-zinc-900/10 bg-white/70 px-3 py-1 text-xs font-medium text-zinc-600 shadow-sm">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
