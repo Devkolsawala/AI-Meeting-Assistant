@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { DownloadCta } from "./components/download-cta";
+import { DownloadSection } from "./components/download-section";
 import { OverlayMockup } from "./components/overlay-mockup";
-import { WaitlistForm } from "./components/waitlist-form";
 
 const APP_VERSION = "0.1.0";
 const WINDOWS_REQUIREMENT = "Requires Windows 10 (build 2004+) or Windows 11";
@@ -97,6 +98,8 @@ const FAQ = [
 ];
 
 export default function HomePage() {
+  const installerAvailable = Boolean(process.env.INSTALLER_DOWNLOAD_URL?.trim());
+
   return (
     <div className="min-h-screen bg-white text-zinc-900 antialiased">
       {/* Nav */}
@@ -154,13 +157,7 @@ export default function HomePage() {
                 during screen share.
               </p>
               <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <a
-                  href="#download"
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-7 py-3.5 text-base font-semibold text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                >
-                  <WindowsLogo className="h-4 w-4" />
-                  Get for Windows
-                </a>
+                <DownloadCta installerAvailable={installerAvailable} />
                 <Link
                   href="/login"
                   className="inline-flex items-center justify-center rounded-full border border-zinc-300 bg-white px-7 py-3.5 text-base font-semibold text-zinc-800 transition-colors hover:bg-zinc-50"
@@ -318,35 +315,11 @@ export default function HomePage() {
         {/* Download / get started */}
         <section id="download" className="py-24">
           <div className="mx-auto max-w-3xl px-5">
-            <div className="rounded-3xl border border-zinc-200 bg-gradient-to-b from-sky-50 to-white p-8 text-center shadow-sm sm:p-12">
-              <h2 className="font-serif text-4xl font-medium tracking-tight sm:text-5xl">
-                Download MeetCopilot
-              </h2>
-              <p className="mx-auto mt-4 max-w-xl text-zinc-600">
-                The desktop app for Windows. Version {APP_VERSION} ·{" "}
-                {WINDOWS_REQUIREMENT}.
-              </p>
-              <div className="mt-8 flex justify-center">
-                <a
-                  href="#download"
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-7 py-3.5 text-base font-semibold text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                >
-                  <WindowsLogo className="h-4 w-4" />
-                  Get for Windows
-                </a>
-              </div>
-
-              <div className="mx-auto mt-12 max-w-lg border-t border-zinc-200 pt-8">
-                <h3 className="text-lg font-semibold">On a Mac?</h3>
-                <p className="mt-2 text-sm text-zinc-600">
-                  MeetCopilot is Windows only for now. Leave your email and
-                  we&apos;ll tell you when the macOS build lands.
-                </p>
-                <div className="mt-5">
-                  <WaitlistForm />
-                </div>
-              </div>
-            </div>
+            <DownloadSection
+              installerAvailable={installerAvailable}
+              version={APP_VERSION}
+              requirement={WINDOWS_REQUIREMENT}
+            />
           </div>
         </section>
       </main>
@@ -371,14 +344,6 @@ export default function HomePage() {
         </div>
       </footer>
     </div>
-  );
-}
-
-function WindowsLogo({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className={className}>
-      <path d="M3 5.1 10.4 4v7.3H3V5.1Zm0 13.8 7.4 1.1v-7.2H3v6.1Zm8.3 1.2L21 21.5V12.7h-9.7v7.4Zm0-16.6v7.4H21V2.5l-9.7 1Z" />
-    </svg>
   );
 }
 
