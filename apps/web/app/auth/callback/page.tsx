@@ -1,12 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { parseHashSession, saveSession } from "../../components/session";
 
 export default function AuthCallbackPage() {
   const [deepLink, setDeepLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Browser implicit flow: GoTrue returns tokens in the URL hash. Persist the
+    // web session and continue to /account. (The desktop PKCE flow never has a
+    // hash — it returns ?code=… below.)
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const hashError = hashParams.get("error_description") ?? hashParams.get("error");
+    if (hashError) {
+      setError(hashError);
+      return;
+    }
+    const hashSession = parseHashSession(window.location.hash);
+    if (hashSession) {
+      saveSession(hashSession);
+      window.location.replace("/account");
+      return;
+    }
+
     const params = new URLSearchParams(window.location.search);
     const callbackError = params.get("error_description") ?? params.get("error");
     if (callbackError) {

@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { type FormEvent, useEffect, useState } from "react";
+import { SiteHeader } from "../components/site-header";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
@@ -10,6 +12,27 @@ interface DesktopFlow {
   cc: string;
   /** CSRF/correlation token echoed back to the desktop via the callback. */
   state: string;
+}
+
+/** Light gradient page shell shared by every state of this screen. */
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-screen flex-col bg-gradient-to-b from-sky-100 via-white to-white text-zinc-900">
+      <SiteHeader
+        action={
+          <Link
+            href="/"
+            className="text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-900"
+          >
+            Back to site
+          </Link>
+        }
+      />
+      <main className="flex w-full max-w-none flex-1 items-center justify-center px-5 py-16">
+        <div className="w-full max-w-md">{children}</div>
+      </main>
+    </div>
+  );
 }
 
 export default function LoginPage() {
@@ -28,41 +51,49 @@ export default function LoginPage() {
 
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     return (
-      <main>
-        <h1>MeetCopilot</h1>
-        <p>
-          Auth is not configured. Set <code>NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
-          <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code>.
-        </p>
-      </main>
+      <Shell>
+        <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
+          <h1 className="font-serif text-2xl font-medium tracking-tight">MeetCopilot</h1>
+          <p className="mt-3 text-sm leading-relaxed text-zinc-600">
+            Auth is not configured. Set{" "}
+            <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">
+              NEXT_PUBLIC_SUPABASE_URL
+            </code>{" "}
+            and{" "}
+            <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">
+              NEXT_PUBLIC_SUPABASE_ANON_KEY
+            </code>
+            .
+          </p>
+        </div>
+      </Shell>
     );
   }
 
   if (flow === undefined) {
     return (
-      <main>
-        <p>Loading…</p>
-      </main>
+      <Shell>
+        <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
+          <p className="text-sm text-zinc-500">Loading…</p>
+        </div>
+      </Shell>
     );
   }
 
-  if (flow === null) {
-    return (
-      <main>
-        <h1>Sign in to MeetCopilot</h1>
-        <p>Please start sign-in from the MeetCopilot desktop app.</p>
-      </main>
-    );
-  }
-
-  const { cc, state } = flow;
-  const redirectTo = `${window.location.origin}/auth/callback?state=${encodeURIComponent(state)}`;
+  // Desktop launches carry cc+state and use PKCE. A bare browser visit (flow ===
+  // null) signs the user into the web account with GoTrue's implicit flow (no
+  // code_challenge), landing on /account.
+  const redirectTo = flow
+    ? `${window.location.origin}/auth/callback?state=${encodeURIComponent(flow.state)}`
+    : `${window.location.origin}/auth/callback`;
 
   function signInWithGoogle() {
     const url = new URL(`${SUPABASE_URL}/auth/v1/authorize`);
     url.searchParams.set("provider", "google");
-    url.searchParams.set("code_challenge", cc);
-    url.searchParams.set("code_challenge_method", "s256");
+    if (flow) {
+      url.searchParams.set("code_challenge", flow.cc);
+      url.searchParams.set("code_challenge_method", "s256");
+    }
     url.searchParams.set("redirect_to", redirectTo);
     window.location.href = url.toString();
   }
@@ -80,8 +111,9 @@ export default function LoginPage() {
           body: JSON.stringify({
             email,
             create_user: true,
-            code_challenge: cc,
-            code_challenge_method: "s256",
+            ...(flow
+              ? { code_challenge: flow.cc, code_challenge_method: "s256" }
+              : {}),
           }),
         },
       );
@@ -98,30 +130,95 @@ export default function LoginPage() {
   }
 
   return (
-    <main>
-      <h1>Sign in to MeetCopilot</h1>
-      <button type="button" className="btn btn-primary" onClick={signInWithGoogle}>
-        Continue with Google
-      </button>
+    <Shell>
+      <div className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
+        <div className="text-center">
+          <h1 className="font-serif text-3xl font-medium tracking-tight">
+            Sign in to MeetCopilot
+          </h1>
+          <p className="mt-2 text-sm text-zinc-500">
+            Real-time AI for every meeting.
+          </p>
+        </div>
 
-      <div className="divider">or</div>
-
-      <form onSubmit={sendMagicLink} className="form">
-        <label htmlFor="email">Email</label>
-        <input
-          id="email"
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
-        />
-        <button type="submit" className="btn" disabled={sending}>
-          {sending ? "Sending…" : "Send magic link"}
+        <button
+          type="button"
+          onClick={signInWithGoogle}
+          className="mt-8 flex w-full items-center justify-center gap-2.5 rounded-full border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold text-zinc-800 transition-colors hover:bg-zinc-50"
+        >
+          <GoogleIcon className="h-5 w-5" />
+          Continue with Google
         </button>
-      </form>
 
-      {message && <p className="message">{message}</p>}
-    </main>
+        <div className="my-6 flex items-center gap-4 text-xs font-medium uppercase tracking-wide text-zinc-400">
+          <span className="h-px flex-1 bg-zinc-200" />
+          or
+          <span className="h-px flex-1 bg-zinc-200" />
+        </div>
+
+        <form onSubmit={sendMagicLink} className="flex flex-col gap-3">
+          <label htmlFor="email" className="text-sm font-medium text-zinc-700">
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          />
+          <button
+            type="submit"
+            disabled={sending}
+            className="mt-1 rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-default disabled:opacity-60"
+          >
+            {sending ? "Sending…" : "Send magic link"}
+          </button>
+        </form>
+
+        {message && (
+          <p className="mt-5 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-900 ring-1 ring-blue-100">
+            {message}
+          </p>
+        )}
+      </div>
+
+      <p className="mt-6 text-center text-xs leading-relaxed text-zinc-500">
+        By continuing you agree to our{" "}
+        <Link href="/terms" className="text-blue-600 hover:underline">
+          Terms
+        </Link>{" "}
+        and{" "}
+        <Link href="/privacy" className="text-blue-600 hover:underline">
+          Privacy Policy
+        </Link>
+        .
+      </p>
+    </Shell>
+  );
+}
+
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className={className}>
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.56c2.08-1.92 3.28-4.74 3.28-8.09Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.56-2.76c-.98.66-2.24 1.06-3.72 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.11a6.6 6.6 0 0 1 0-4.22V7.05H2.18a11 11 0 0 0 0 9.9l3.66-2.84Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.05l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38Z"
+      />
+    </svg>
   );
 }
