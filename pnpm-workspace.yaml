@@ -1,0 +1,7 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Allow only these dependencies to run install/postinstall scripts.
+onlyBuiltDependencies:
+  - electron

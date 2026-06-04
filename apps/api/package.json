@@ -1,0 +1,20 @@
+{
+  "name": "@meetcopilot/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.4",
+    "@meetcopilot/shared": "workspace:*",
+    "hono": "^4.12.23"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.4"
+  }
+}

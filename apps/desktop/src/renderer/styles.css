@@ -1,0 +1,101 @@
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+.overlay {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  color: #e6e8ee;
+  background: rgba(17, 19, 26, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+}
+
+.titlebar {
+  -webkit-app-region: drag;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  user-select: none;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #38d39f;
+  box-shadow: 0 0 8px #38d39f;
+}
+
+.title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(56, 211, 159, 0.15);
+  color: #8ef0cd;
+}
+
+.close {
+  -webkit-app-region: no-drag;
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: #9aa3b2;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.close:hover {
+  background: rgba(255, 80, 80, 0.18);
+  color: #ff6b6b;
+}
+
+.log {
+  -webkit-app-region: no-drag;
+  flex: 1;
+  overflow-y: auto;
+  margin: 0;
+  padding: 10px;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.log-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #c7ccd6;
+}
+
+.hint {
+  padding: 6px 10px;
+  font-size: 10px;
+  color: #6b7280;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  user-select: none;
+}

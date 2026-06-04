@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self';"
+    />
+    <title>MeetCopilot Overlay</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="overlay">
+      <header class="titlebar">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="app-label" class="title">MeetCopilot</span>
+        <span class="badge">overlay spike</span>
+        <button id="close-btn" class="close" title="Quit (Ctrl+Shift+Q)" aria-label="Quit">
+          &#10005;
+        </button>
+      </header>
+      <main id="log" class="log" aria-live="polite"></main>
+      <footer class="hint">Drag the title bar to move &bull; Invisible to screen capture</footer>
+    </div>
+    <script type="module" src="renderer.js"></script>
+  </body>
+</html>
