@@ -1,23 +1,55 @@
-:root {
-  color-scheme: light dark;
-}
+@import "tailwindcss";
 
-* {
-  box-sizing: border-box;
-}
+/*
+ * The marketing pages are styled entirely with Tailwind utilities. The rules
+ * below preserve the original Phase-1 auth pages (/login, /auth/callback),
+ * which render inside a bare <main> and rely on these classes.
+ *
+ * The bare-element rules live in @layer base on purpose: Tailwind's utility
+ * classes sit in a later cascade layer, so utilities on the marketing pages
+ * always win over these defaults (an unlayered rule here would beat utilities
+ * and clamp the layout).
+ */
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  line-height: 1.5;
-}
+@layer base {
+  :root {
+    color-scheme: light dark;
+  }
 
-main {
-  max-width: 26rem;
-  margin: 0 auto;
-  padding: 4rem 1.5rem;
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.5;
+  }
+
+  /* Auth-page layout shell + restored typography. */
+  main {
+    max-width: 26rem;
+    margin: 0 auto;
+    padding: 4rem 1.5rem;
+  }
+
+  main h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 0.75rem;
+  }
+
+  main h2 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem;
+  }
+
+  main p {
+    margin: 0 0 0.75rem;
+  }
 }
 
 .btn {
@@ -74,7 +106,6 @@ main {
   font-size: 0.9rem;
 }
 
-.link,
-a {
+.link {
   color: #2563eb;
 }

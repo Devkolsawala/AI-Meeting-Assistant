@@ -3,13 +3,15 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MeetCopilot",
-  description: "AI meeting assistant — sign in to your account.",
+  title: "MeetCopilot — Real-time AI for every meeting",
+  description:
+    "MeetCopilot listens to your calls and gives you live AI answers, notes, and post-meeting summaries — in a private overlay that stays hidden during screen share. Windows desktop app.",
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
