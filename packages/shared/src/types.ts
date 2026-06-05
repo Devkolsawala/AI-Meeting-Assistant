@@ -42,6 +42,8 @@ export interface InferRequest {
   lane?: InferLane;
   /** Persona key to apply (injected server-side). Used from Milestone 6. */
   persona?: string;
+  /** Usage-session id this call belongs to, so the server can meter the event. */
+  sessionId?: string;
 }
 
 /**
@@ -51,6 +53,40 @@ export interface InferRequest {
 export interface InferStreamDelta {
   /** Next chunk of generated answer text. */
   delta: string;
+}
+
+/** Plan caps for a user. `null` means unlimited (e.g. a paid plan). */
+export interface UsageLimits {
+  maxSessions: number | null;
+  maxSttSeconds: number | null;
+}
+
+/**
+ * Plan + usage snapshot the backend returns so the desktop can gate capture and
+ * show usage meters / soft warnings. Computed server-side; never client-trusted.
+ */
+export interface UsageSnapshot {
+  /** Plan name, e.g. "free" or a paid plan id. */
+  plan: string;
+  /** Metered sessions counted so far. */
+  sessions: number;
+  /** Total metered speech-to-text seconds so far. */
+  sttSeconds: number;
+  /** Caps that apply to this user's plan. */
+  limits: UsageLimits;
+  /** True when a cap is reached — further usage is blocked. */
+  overLimit: boolean;
+  /** True when usage has crossed the soft-warning threshold (e.g. 80%). */
+  warn: boolean;
+}
+
+/** Machine-readable error code returned (HTTP 402) when a usage cap blocks a request. */
+export const LIMIT_REACHED = "limit_reached" as const;
+
+/** Body returned with HTTP 402 when a usage cap blocks the request. */
+export interface LimitReachedResponse {
+  error: typeof LIMIT_REACHED;
+  usage: UsageSnapshot;
 }
 
 /** Minimal provider-agnostic speech-to-text adapter contract. */

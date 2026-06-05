@@ -8,12 +8,22 @@ export class InferError extends Error {
   }
 }
 
+/** Thrown when the backend blocks the call because the user is over their plan cap. */
+export class LimitReachedError extends Error {
+  constructor() {
+    super("limit_reached");
+    this.name = "LimitReachedError";
+  }
+}
+
 export interface StreamInferOptions {
   apiBase: string;
   accessToken: string;
   context: InferContextLine[];
   /** Persona key the backend injects into the prompt. */
   persona?: string;
+  /** Usage-session id, so the backend meters this call against the meeting. */
+  sessionId?: string;
   signal: AbortSignal;
   /** Called for each answer text delta as it streams in. */
   onDelta: (text: string) => void;
@@ -60,12 +70,19 @@ export async function streamInfer(options: StreamInferOptions): Promise<void> {
       Authorization: `Bearer ${options.accessToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ context: options.context, persona: options.persona }),
+    body: JSON.stringify({
+      context: options.context,
+      persona: options.persona,
+      sessionId: options.sessionId,
+    }),
     signal: options.signal,
   });
 
   if (res.status === 401) {
     throw new InferError("Not authorized — please sign in again.");
+  }
+  if (res.status === 402) {
+    throw new LimitReachedError();
   }
   if (!res.ok) {
     throw new InferError(`Inference request failed (HTTP ${res.status}).`);

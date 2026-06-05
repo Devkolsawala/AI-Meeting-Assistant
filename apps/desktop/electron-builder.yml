@@ -16,6 +16,12 @@ protocols:
       - meetcopilot
 win:
   target: nsis
+  # Code signing is delegated to a custom hook that picks the backend (local cert,
+  # Azure Trusted Signing, or SSL.com eSigner) from the SIGN_PROVIDER env var and
+  # reads all credentials from the environment. With SIGN_PROVIDER unset the hook is
+  # a no-op and the build is left unsigned (dev). See docs/desktop-signing.md.
+  signtoolOptions:
+    sign: scripts/sign.mjs
 nsis:
   oneClick: true
   perMachine: false

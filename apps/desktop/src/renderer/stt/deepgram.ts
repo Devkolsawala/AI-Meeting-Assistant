@@ -14,10 +14,22 @@ const FRAMES_PER_CHUNK = 320;
 const OPEN_TIMEOUT_MS = 10000;
 const KEEP_ALIVE_INTERVAL_MS = 3000;
 
+/** A short-lived Deepgram token plus its TTL, however it was obtained. */
+export interface DeepgramTokenGrant {
+  accessToken: string;
+  expiresInSeconds?: number;
+}
+
 interface DeepgramSttAdapterOptions {
   micStream: MediaStream;
   systemAudioStream: MediaStream;
   tokenEndpoint?: string;
+  /**
+   * Supplies the short-lived Deepgram token. When provided (the app routes this
+   * through the authed, cap-gated main process), it is used instead of fetching
+   * the token endpoint directly.
+   */
+  getToken?: () => Promise<DeepgramTokenGrant>;
   onLog?: (label: string, value: string) => void;
 }
 
@@ -181,6 +193,13 @@ export class DeepgramSttAdapter implements SpeechToTextAdapter {
   }
 
   private async fetchAccessToken(): Promise<string> {
+    if (this.options.getToken) {
+      this.log("Deepgram", "requesting short-lived token via main process");
+      const grant = await this.options.getToken();
+      this.log("Deepgram", `received short-lived token (ttl=${grant.expiresInSeconds ?? "unknown"}s)`);
+      return grant.accessToken;
+    }
+
     const endpoint = this.options.tokenEndpoint ?? DEFAULT_TOKEN_ENDPOINT;
     this.log("Deepgram", `requesting short-lived token from ${endpoint}`);
 

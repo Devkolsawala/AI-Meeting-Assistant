@@ -6,12 +6,22 @@ import {
   APP_NAME,
   DEFAULT_PERSONA_KEY,
   type InferContextLine,
+  type LimitReachedResponse,
   parseSttProvider,
+  type UsageSnapshot,
 } from "@meetcopilot/shared";
 import { AuthService } from "./auth/auth-service.js";
 import { PROTOCOL } from "./auth/config.js";
-import { streamInfer } from "./infer/stream.js";
-import { type AuthStatus, IpcChannel, type InferRunResult, type StatusEntry } from "./ipc.js";
+import { LimitReachedError, streamInfer } from "./infer/stream.js";
+import { captureError, captureEvent } from "./telemetry.js";
+import {
+  type AuthStatus,
+  IpcChannel,
+  type InferRunResult,
+  type SessionStartResult,
+  type StatusEntry,
+  type SttTokenResult,
+} from "./ipc.js";
 
 const {
   app,
@@ -47,11 +57,141 @@ const authService = new AuthService((status: AuthStatus) => {
 /** Backend base URL for inference + STT token. */
 const API_BASE = (process.env.API_URL?.trim() || "http://127.0.0.1:8787").replace(/\/+$/, "");
 
+/** Web app base URL; the upgrade prompt opens its pricing section. */
+const WEB_BASE = (process.env.WEB_URL?.trim() || "http://localhost:3000").replace(/\/+$/, "");
+
 /** The "ask" hotkey. Tells the overlay to send its context to /infer. */
 const ASK_HOTKEY = "CommandOrControl+Enter";
 
+// Crash reporting for the main process. The renderer forwards its own errors via
+// IpcChannel.TelemetryError (registered below).
+process.on("unhandledRejection", (reason) => captureError(reason, { kind: "unhandledRejection" }));
+process.on("uncaughtException", (err) => captureError(err, { kind: "uncaughtException" }));
+
+/** PostHog distinct id: the signed-in email, or "anonymous" when signed out. */
+async function distinctId(): Promise<string> {
+  try {
+    return (await authService.getStatus()).email ?? "anonymous";
+  } catch {
+    return "anonymous";
+  }
+}
+
+/** Persisted one-time flags (e.g. first_session) under the app's userData dir. */
+function readTelemetryFlags(): Record<string, boolean> {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(app.getPath("userData"), "telemetry-state.json"), "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+/** Emits a product event the first time `flag` is seen, then remembers it. */
+async function trackFirst(flag: string, event: string, properties?: Record<string, unknown>): Promise<void> {
+  const flags = readTelemetryFlags();
+  if (flags[flag]) {
+    return;
+  }
+  flags[flag] = true;
+  try {
+    fs.writeFileSync(path.join(app.getPath("userData"), "telemetry-state.json"), JSON.stringify(flags));
+  } catch {
+    // Best-effort; re-emitting once more on failure is harmless.
+  }
+  captureEvent(event, await distinctId(), properties);
+}
+
 /** Aborts the in-flight inference stream when a new one starts. */
 let inferAbort: AbortController | null = null;
+
+/** The current usage-metering session id (set on capture start, cleared on stop). */
+let currentSessionId: string | null = null;
+
+/**
+ * Opens a usage-metering session for the meeting. Best-effort: if the user is
+ * signed out or the backend is unreachable, capture still proceeds unmetered.
+ */
+async function startUsageSession(): Promise<SessionStartResult> {
+  const accessToken = await authService.getValidAccessToken();
+  if (!accessToken) {
+    return { ok: false, error: "Sign in to start a session." };
+  }
+  try {
+    const res = await fetch(`${API_BASE}/session/start`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (res.status === 402) {
+      const body = (await res.json().catch(() => null)) as LimitReachedResponse | null;
+      return { ok: false, limitReached: true, usage: body?.usage };
+    }
+    if (!res.ok) {
+      return { ok: false, error: `Session start failed (HTTP ${res.status}).` };
+    }
+    const data = (await res.json()) as { sessionId?: string; usage?: UsageSnapshot };
+    if (!data.sessionId) {
+      return { ok: false, error: "Session start returned no id." };
+    }
+    currentSessionId = data.sessionId;
+    void trackFirst("firstSession", "first_session");
+    return { ok: true, usage: data.usage };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Mints a Deepgram STT token via the authed, cap-gated backend. Routed through main
+ * so the Supabase access token never reaches the renderer.
+ */
+async function mintSttToken(): Promise<SttTokenResult> {
+  const accessToken = await authService.getValidAccessToken();
+  if (!accessToken) {
+    return { ok: false, error: "Sign in to start transcription." };
+  }
+  try {
+    const res = await fetch(`${API_BASE}/stt-token`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    });
+    if (res.status === 402) {
+      return { ok: false, limitReached: true };
+    }
+    if (!res.ok) {
+      return { ok: false, error: `STT token request failed (HTTP ${res.status}).` };
+    }
+    const data = (await res.json()) as { accessToken?: string; expiresInSeconds?: number };
+    if (!data.accessToken) {
+      return { ok: false, error: "STT token response had no token." };
+    }
+    return { ok: true, accessToken: data.accessToken, expiresInSeconds: data.expiresInSeconds };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** Closes the current usage-metering session, if any. Best-effort. */
+async function endUsageSession(): Promise<void> {
+  const sessionId = currentSessionId;
+  currentSessionId = null;
+  if (!sessionId) {
+    return;
+  }
+  const accessToken = await authService.getValidAccessToken();
+  if (!accessToken) {
+    return;
+  }
+  try {
+    await fetch(`${API_BASE}/session/end`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId }),
+    });
+  } catch (err) {
+    diag(`SESSION end failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
 
 function isContextLine(value: unknown): value is InferContextLine {
   if (typeof value !== "object" || value === null) return false;
@@ -79,15 +219,20 @@ async function runInference(context: InferContextLine[]): Promise<InferRunResult
       accessToken,
       context,
       persona: DEFAULT_PERSONA_KEY,
+      sessionId: currentSessionId ?? undefined,
       signal: abort.signal,
       onDelta: (text) => overlay?.webContents.send(IpcChannel.InferDelta, text),
     });
     if (inferAbort === abort) inferAbort = null;
     overlay?.webContents.send(IpcChannel.InferDone);
+    void trackFirst("firstAnswer", "first_answer");
     return { ok: true };
   } catch (err) {
     if (abort.signal.aborted) {
       return { ok: false, error: "cancelled" };
+    }
+    if (err instanceof LimitReachedError) {
+      return { ok: false, limitReached: true, error: "limit_reached" };
     }
     const message = err instanceof Error ? err.message : String(err);
     overlay?.webContents.send(IpcChannel.InferError, message);
@@ -285,6 +430,19 @@ if (!hasSingleInstanceLock) {
   ipcMain.handle(IpcChannel.AuthLogin, () => authService.beginLogin());
   ipcMain.handle(IpcChannel.AuthLogout, () => authService.logout());
   ipcMain.handle(IpcChannel.AuthGetStatus, () => authService.getStatus());
+  ipcMain.handle(IpcChannel.SessionStart, () => startUsageSession());
+  ipcMain.handle(IpcChannel.SessionEnd, () => endUsageSession());
+  ipcMain.handle(IpcChannel.SttToken, () => mintSttToken());
+  ipcMain.on(IpcChannel.TelemetryError, (_event, message: unknown) => {
+    captureError(new Error(typeof message === "string" ? message : JSON.stringify(message)), {
+      source: "renderer",
+    });
+  });
+  ipcMain.on(IpcChannel.OpenUpgrade, () => {
+    void electron.shell.openExternal(`${WEB_BASE}/#pricing`).catch((err: unknown) => {
+      diag(`OPEN_UPGRADE failed: ${err instanceof Error ? err.message : String(err)}`);
+    });
+  });
   ipcMain.handle(IpcChannel.InferRun, (_event, context: unknown) => {
     const lines = Array.isArray(context) ? context.filter(isContextLine) : [];
     return runInference(lines);

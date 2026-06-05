@@ -17,5 +17,21 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  // Build/tooling scripts run in Node; give them the Node globals they use.
+  {
+    files: ["**/scripts/**/*.{js,cjs,mjs}", "**/*.config.{js,cjs,mjs}"],
+    languageOptions: {
+      globals: {
+        process: "readonly",
+        console: "readonly",
+        Buffer: "readonly",
+        module: "writable",
+        require: "readonly",
+        __dirname: "readonly",
+        __filename: "readonly",
+        URL: "readonly",
+      },
+    },
+  },
   prettier,
 );

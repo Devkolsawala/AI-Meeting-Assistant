@@ -45,12 +45,30 @@ for local development into `apps/web/.env.local`.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public  | Yes      | Supabase → Project Settings → API → **anon public** key. The only Supabase key allowed client-side. |
 | `INSTALLER_DOWNLOAD_URL`        | Server  | Optional | The installer asset URL (GitHub Releases / S3). `/download` 302-redirects here. Unset → download buttons open the "notify me" waitlist. **Not** `NEXT_PUBLIC` — never ships to the client. |
 | `NEXT_PUBLIC_API_BASE_URL`      | Public  | Optional | Backend API base URL (AWS App Runner). **Reserved for Phase 2** — not consumed yet. Safe to leave unset for now. |
+| `SUPABASE_SERVICE_ROLE_KEY`     | Server  | Yes (billing) | Supabase → Project Settings → API → **service_role** key. The Razorpay webhook uses it to write `subscriptions` (bypasses RLS). **Secret — never `NEXT_PUBLIC`.** |
+| `RAZORPAY_KEY_ID`               | Server  | Yes (billing) | Razorpay → Settings → API Keys. Returned to the browser by `/api/checkout` to open Checkout. |
+| `RAZORPAY_KEY_SECRET`           | Server  | Yes (billing) | Razorpay API secret. Signs subscription-create calls. **Secret.** |
+| `RAZORPAY_WEBHOOK_SECRET`       | Server  | Yes (billing) | Razorpay → Settings → Webhooks. Verifies webhook signatures. **Secret.** |
+| `RAZORPAY_PLAN_ID`              | Server  | Yes (billing) | The Razorpay **Plan** id for the paid tier (Subscriptions → Plans). |
+| `RAZORPAY_PLAN_NAME`            | Server  | Optional | Plan name written to `subscriptions.plan` when active (default `pro`). |
+| `RAZORPAY_SUBSCRIPTION_TOTAL_COUNT` | Server | Optional | Billing cycles for a new subscription (default `120`). |
 
 Rules of thumb:
 
 - `NEXT_PUBLIC_*` values are inlined into the browser bundle — only ever public,
-  non-secret values. The service-role key and `SUPABASE_JWT_SECRET` live on the
-  backend (`apps/api`) and must **never** appear in this project.
+  non-secret values. The service-role key, Razorpay secrets, and
+  `SUPABASE_JWT_SECRET` are server-only and must **never** be `NEXT_PUBLIC`.
+
+## Billing setup (Razorpay)
+
+1. In the Razorpay Dashboard create a **Plan** for the paid tier (Subscriptions →
+   Plans) and copy its id into `RAZORPAY_PLAN_ID`.
+2. Add a **Webhook** pointing at `https://<your-domain>/api/razorpay/webhook` with
+   the `subscription.*` events (activated, charged, pending, halted, cancelled,
+   completed, paused, resumed). Set a secret and put it in `RAZORPAY_WEBHOOK_SECRET`.
+3. Apply the additive migration `supabase/migrations/0004_billing_webhooks.sql`.
+4. Subscription status is written **only** by the webhook (the idempotent
+   `process_subscription_event` RPC). The checkout route never writes it.
 - **Redeploy after changing `INSTALLER_DOWNLOAD_URL`.** The home page is
   statically generated, so its download-button-vs-waitlist state is baked at
   build time. (The `/download` redirect itself always reflects the current

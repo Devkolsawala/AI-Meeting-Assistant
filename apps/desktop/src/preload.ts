@@ -20,6 +20,15 @@ const api: MeetCopilotApi = {
       ipcRenderer.on(IpcChannel.AuthChanged, (_event, status: AuthStatus) => handler(status));
     },
   },
+  session: {
+    start: () => ipcRenderer.invoke(IpcChannel.SessionStart),
+    end: () => ipcRenderer.invoke(IpcChannel.SessionEnd),
+  },
+  stt: {
+    deepgramToken: () => ipcRenderer.invoke(IpcChannel.SttToken),
+  },
+  openUpgrade: () => ipcRenderer.send(IpcChannel.OpenUpgrade),
+  reportError: (message: string) => ipcRenderer.send(IpcChannel.TelemetryError, message),
   infer: {
     run: (context: InferContextLine[]) => ipcRenderer.invoke(IpcChannel.InferRun, context),
     onDelta: (handler) => {

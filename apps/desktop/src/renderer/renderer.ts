@@ -1,4 +1,9 @@
-import type { InferContextLine, SpeechToTextAdapter, SttTranscriptEvent } from "@meetcopilot/shared";
+import type {
+  InferContextLine,
+  SpeechToTextAdapter,
+  SttTranscriptEvent,
+  UsageSnapshot,
+} from "@meetcopilot/shared";
 import { initAuthUi } from "./auth-ui.js";
 import { createSttAdapter } from "./stt/factory.js";
 
@@ -15,6 +20,10 @@ const sttStatusEl = document.getElementById("stt-status");
 const transcriptLinesEl = document.getElementById("transcript-lines");
 const answerTextEl = document.getElementById("answer-text");
 const askBtn = document.getElementById("ask-btn");
+const upgradeBannerEl = document.getElementById("upgrade-banner");
+const upgradeTextEl = document.getElementById("upgrade-text");
+const upgradeBtn = document.getElementById("upgrade-btn");
+const upgradeDismissBtn = document.getElementById("upgrade-dismiss");
 
 const api = window.meetcopilot;
 const audioRmsThreshold = 0.01;
@@ -223,6 +232,47 @@ function appendAnswer(text: string): void {
   answerTextEl.scrollTop = answerTextEl.scrollHeight;
 }
 
+function hideUpgrade(): void {
+  if (upgradeBannerEl) upgradeBannerEl.hidden = true;
+}
+
+/** Shows the blocking "free limit reached" banner with the upgrade CTA. */
+function showUpgrade(): void {
+  if (!upgradeBannerEl) return;
+  if (upgradeTextEl) {
+    upgradeTextEl.textContent = "You've reached the free limit. Upgrade to keep using MeetCopilot.";
+  }
+  upgradeBannerEl.dataset.state = "limit";
+  upgradeBannerEl.hidden = false;
+}
+
+/** Shows the non-blocking soft warning as usage approaches the cap. */
+function showUsageWarning(usage: UsageSnapshot): void {
+  if (!upgradeBannerEl) return;
+  const parts: string[] = [];
+  if (usage.limits.maxSessions !== null) {
+    parts.push(`${usage.sessions}/${usage.limits.maxSessions} sessions`);
+  }
+  if (usage.limits.maxSttSeconds !== null) {
+    parts.push(`${Math.round(usage.sttSeconds)}/${usage.limits.maxSttSeconds}s`);
+  }
+  if (upgradeTextEl) {
+    const detail = parts.length > 0 ? ` (${parts.join(", ")})` : "";
+    upgradeTextEl.textContent = `You're approaching the free limit${detail}.`;
+  }
+  upgradeBannerEl.dataset.state = "warn";
+  upgradeBannerEl.hidden = false;
+}
+
+/** Mints a Deepgram token via the authed, cap-gated main process. */
+async function getDeepgramToken(): Promise<{ accessToken: string; expiresInSeconds?: number }> {
+  const result = await api.stt.deepgramToken();
+  if (!result.ok || !result.accessToken) {
+    throw new Error(result.limitReached ? "limit_reached" : (result.error ?? "STT token request failed"));
+  }
+  return { accessToken: result.accessToken, expiresInSeconds: result.expiresInSeconds };
+}
+
 async function runAsk(): Promise<void> {
   if (isAsking) return;
   isAsking = true;
@@ -231,8 +281,13 @@ async function runAsk(): Promise<void> {
   setAnswer("Thinking…", "pending");
 
   const result = await api.infer.run(transcriptContext.slice(-maxContextLines));
-  if (!result.ok && result.error && result.error !== "cancelled") {
-    setAnswer(result.error, "error");
+  if (!result.ok) {
+    if (result.limitReached) {
+      setAnswer("You've reached the free limit. Upgrade to keep getting answers.", "error");
+      showUpgrade();
+    } else if (result.error && result.error !== "cancelled") {
+      setAnswer(result.error, "error");
+    }
   }
 
   isAsking = false;
@@ -339,6 +394,7 @@ async function startCapture(): Promise<void> {
     sttAdapter = createSttAdapter(provider, {
       micStream,
       systemAudioStream,
+      getDeepgramToken,
       onLog: appendLog,
     });
     sttUnsubscribe = [sttAdapter.onPartial(handleTranscript), sttAdapter.onFinal(handleTranscript)];
@@ -347,17 +403,39 @@ async function startCapture(): Promise<void> {
 
     capture = { micStream, displayStream, systemAudioStream, monitors, sttAdapter, sttUnsubscribe };
     appendLog("Capture", `microphone, system loopback, and ${provider} STT are live`);
+
+    // Open a usage-metering session for this meeting. The free cap is enforced
+    // server-side: a blocked user is torn down and shown the upgrade prompt.
+    const session = await api.session.start();
+    if (session.ok) {
+      appendLog("Usage", "metering session started");
+      hideUpgrade();
+      if (session.usage?.warn) {
+        showUsageWarning(session.usage);
+      }
+    } else if (session.limitReached) {
+      appendLog("Usage", "free limit reached");
+      showUpgrade();
+      stopCapture();
+      return;
+    } else if (session.error) {
+      appendLog("Usage", `metering off: ${session.error}`);
+    }
   } catch (err: unknown) {
-    appendLog("Capture error", getErrorMessage(err));
+    const message = getErrorMessage(err);
+    appendLog("Capture error", message);
     updateCaptureStatus("You", "error", "error");
     updateCaptureStatus("Them", "error", "error");
-    updateSttStatus("error", "error");
+    updateSttStatus("error", message === "limit_reached" ? "limit reached" : "error");
     for (const unsubscribe of sttUnsubscribe) unsubscribe();
     await sttAdapter?.stop().catch((stopErr: unknown) => {
       appendLog("STT error", `failed to stop after error: ${getErrorMessage(stopErr)}`);
     });
     for (const monitor of monitors) monitor.stop();
     stopStreams([micStream, displayStream, systemAudioStream]);
+    if (message === "limit_reached") {
+      showUpgrade();
+    }
   } finally {
     isStartingCapture = false;
     setCaptureControls();
@@ -369,6 +447,8 @@ function stopCapture(): void {
 
   const currentCapture = capture;
   capture = null;
+  // Close the usage-metering session; the server derives total STT seconds from it.
+  void api.session.end();
   for (const unsubscribe of currentCapture.sttUnsubscribe) unsubscribe();
   void currentCapture.sttAdapter.stop().catch((err: unknown) => {
     appendLog("STT error", `failed to stop: ${getErrorMessage(err)}`);
@@ -402,11 +482,20 @@ startCaptureBtn?.addEventListener("click", () => {
   void startCapture();
 });
 stopCaptureBtn?.addEventListener("click", () => stopCapture());
+upgradeBtn?.addEventListener("click", () => api.openUpgrade());
+upgradeDismissBtn?.addEventListener("click", () => hideUpgrade());
 closeBtn?.addEventListener("click", () => {
   stopCapture();
   api.close();
 });
 window.addEventListener("beforeunload", () => stopCapture());
+
+// Forward renderer crashes to the main process for Sentry reporting (the overlay's
+// CSP blocks direct network egress, so main owns telemetry).
+window.addEventListener("error", (event) => api.reportError(event.message || "renderer error"));
+window.addEventListener("unhandledrejection", (event) =>
+  api.reportError(`unhandledrejection: ${String(event.reason)}`),
+);
 
 setCaptureControls();
 updateCaptureStatus("You", "idle", "idle");

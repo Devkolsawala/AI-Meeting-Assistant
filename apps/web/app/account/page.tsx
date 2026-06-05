@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { clearSession, readSession } from "../components/session";
+import { ManageBillingButton } from "../components/manage-billing-button";
 import { SiteHeader } from "../components/site-header";
+import { UpgradeButton } from "../components/upgrade-button";
+import { UsageMeter } from "../components/usage-meter";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
@@ -13,6 +16,13 @@ type Status = "loading" | "ready" | "unauthenticated" | "error";
 function planLabel(plan: string): string {
   if (!plan) return "Free";
   return plan.charAt(0).toUpperCase() + plan.slice(1);
+}
+
+function formatDate(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
 }
 
 /** Light gradient page shell shared by every state of this screen. */
@@ -41,6 +51,8 @@ export default function AccountPage() {
   const [email, setEmail] = useState<string | null>(null);
   // Default plan is Free: a brand-new user may have no subscriptions row yet.
   const [plan, setPlan] = useState("free");
+  // Renewal / period-end date (ISO) for paid plans, when known.
+  const [renewal, setRenewal] = useState<string | null>(null);
 
   useEffect(() => {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
@@ -75,13 +87,19 @@ export default function AccountPage() {
 
         // Plan is best-effort: never block the page if the lookup fails.
         let resolvedPlan = "free";
+        let resolvedRenewal: string | null = null;
         try {
-          const subRes = await fetch(`${SUPABASE_URL}/rest/v1/subscriptions?select=plan`, {
-            headers: authHeaders,
-          });
+          const subRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/subscriptions?select=plan,current_period_end`,
+            { headers: authHeaders },
+          );
           if (subRes.ok) {
-            const rows = (await subRes.json()) as Array<{ plan?: string | null }>;
+            const rows = (await subRes.json()) as Array<{
+              plan?: string | null;
+              current_period_end?: string | null;
+            }>;
             if (rows[0]?.plan) resolvedPlan = rows[0].plan;
+            resolvedRenewal = rows[0]?.current_period_end ?? null;
           }
         } catch {
           // Keep the Free default.
@@ -90,6 +108,7 @@ export default function AccountPage() {
         if (cancelled) return;
         setEmail(user.email ?? null);
         setPlan(resolvedPlan);
+        setRenewal(resolvedRenewal);
         setStatus("ready");
       } catch {
         if (!cancelled) setStatus("error");
@@ -195,13 +214,24 @@ export default function AccountPage() {
           <div>
             <p className="text-sm font-medium text-zinc-700">Plan</p>
             <p className="text-sm text-zinc-500">
-              {plan === "free" ? "Upgrade options are coming soon." : "Thanks for subscribing."}
+              {plan === "free"
+                ? "Upgrade to unlock higher usage limits."
+                : "Thanks for subscribing."}
             </p>
+            {plan !== "free" && renewal && formatDate(renewal) && (
+              <p className="mt-1 text-xs text-zinc-400">Renews on {formatDate(renewal)}</p>
+            )}
           </div>
           <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700 ring-1 ring-blue-100">
             {planLabel(plan)}
           </span>
         </div>
+
+        {plan === "free" && (
+          <div className="mt-5 border-t border-zinc-100 pt-5">
+            <UpgradeButton email={email} />
+          </div>
+        )}
       </div>
 
       {/* Download */}
@@ -220,26 +250,25 @@ export default function AccountPage() {
         </a>
       </div>
 
-      {/* Phase 2 — usage meter + billing portal. Intentional placeholders;
-          metering and billing are server-authoritative and out of scope here. */}
-      <div className="mt-5 grid gap-5 sm:grid-cols-2">
-        {[
-          { title: "Usage", body: "Track your monthly answers and transcription minutes." },
-          { title: "Billing", body: "Manage your plan, payment method, and invoices." },
-        ].map((card) => (
-          <div
-            key={card.title}
-            className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50/60 p-6"
-          >
-            <div className="flex items-center justify-between">
-              <p className="font-semibold text-zinc-900">{card.title}</p>
-              <span className="rounded-full bg-zinc-200/70 px-2.5 py-0.5 text-xs font-medium text-zinc-600">
-                Phase 2
-              </span>
-            </div>
-            <p className="mt-2 text-sm text-zinc-500">{card.body}</p>
+      {/* Live usage meter (reads usage_sessions via the backend) + billing. */}
+      <div className="mt-5">
+        <UsageMeter />
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <p className="font-semibold text-zinc-900">Billing</p>
+        {plan === "free" ? (
+          <p className="mt-2 text-sm text-zinc-500">
+            You&apos;re on the Free plan. Upgrade above to unlock higher limits.
+          </p>
+        ) : (
+          <div className="mt-3 flex flex-col gap-3">
+            <p className="text-sm text-zinc-500">
+              View your subscription, payment method, and invoices.
+            </p>
+            <ManageBillingButton />
           </div>
-        ))}
+        )}
       </div>
     </Shell>
   );

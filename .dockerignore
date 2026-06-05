@@ -1,0 +1,14 @@
+# Keep the Docker build context small and never ship local state or secrets.
+**/node_modules
+**/dist
+**/.next
+**/release
+**/.turbo
+**/*.tsbuildinfo
+.git
+.gitignore
+**/*.log
+.env
+.env.*
+!.env.example
+docs

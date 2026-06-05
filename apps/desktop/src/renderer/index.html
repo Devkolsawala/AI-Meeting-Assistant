@@ -31,6 +31,17 @@
           <button id="signout-btn" class="capture-btn" type="button" disabled>Sign out</button>
         </div>
       </section>
+      <section id="upgrade-banner" class="upgrade-banner" aria-live="polite" hidden>
+        <span id="upgrade-text" class="upgrade-text"></span>
+        <span class="upgrade-actions">
+          <button id="upgrade-btn" class="capture-btn capture-btn-primary" type="button">
+            Upgrade
+          </button>
+          <button id="upgrade-dismiss" class="upgrade-dismiss" type="button" aria-label="Dismiss">
+            &#10005;
+          </button>
+        </span>
+      </section>
       <section class="capture" aria-label="Audio capture">
         <div class="capture-actions">
           <button id="start-capture-btn" class="capture-btn capture-btn-primary" type="button">

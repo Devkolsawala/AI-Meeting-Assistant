@@ -2,6 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { parseHashSession, saveSession } from "../../components/session";
+import { captureEventClient } from "../../lib/telemetry-client";
+
+/** Extracts the user id (`sub`) from a Supabase JWT for analytics, best-effort. */
+function jwtSubject(token: string): string {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1] ?? "")) as { sub?: string };
+    return typeof payload.sub === "string" ? payload.sub : "web-user";
+  } catch {
+    return "web-user";
+  }
+}
 
 export default function AuthCallbackPage() {
   const [deepLink, setDeepLink] = useState<string | null>(null);
@@ -20,6 +31,7 @@ export default function AuthCallbackPage() {
     const hashSession = parseHashSession(window.location.hash);
     if (hashSession) {
       saveSession(hashSession);
+      captureEventClient("signed_in", jwtSubject(hashSession.accessToken), { surface: "web" });
       window.location.replace("/account");
       return;
     }

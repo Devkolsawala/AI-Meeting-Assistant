@@ -1,5 +1,5 @@
 import type { SpeechToTextAdapter, SttProvider } from "@meetcopilot/shared";
-import { DeepgramSttAdapter } from "./deepgram.js";
+import { type DeepgramTokenGrant, DeepgramSttAdapter } from "./deepgram.js";
 import { ElevenLabsSttAdapter } from "./elevenlabs.js";
 import { SarvamSttAdapter } from "./sarvam.js";
 
@@ -7,6 +7,8 @@ import { SarvamSttAdapter } from "./sarvam.js";
 export interface SttAdapterOptions {
   micStream: MediaStream;
   systemAudioStream: MediaStream;
+  /** Supplies a Deepgram token (routed through the authed, cap-gated main process). */
+  getDeepgramToken?: () => Promise<DeepgramTokenGrant>;
   onLog?: (label: string, value: string) => void;
 }
 
@@ -21,7 +23,7 @@ export function createSttAdapter(
     case "sarvam":
       return new SarvamSttAdapter(options);
     case "deepgram":
-      return new DeepgramSttAdapter(options);
+      return new DeepgramSttAdapter({ ...options, getToken: options.getDeepgramToken });
     default:
       return assertNever(provider);
   }
