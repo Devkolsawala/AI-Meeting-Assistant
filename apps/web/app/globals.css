@@ -1,5 +1,115 @@
 @import "tailwindcss";
 
+/* ============================================================================
+ * MeetCopilot marketing design system ("Warm Precision") — Tailwind v4.
+ * Named utilities (bg-cream, text-accent, font-display, animate-float, …) are
+ * registered in @theme; var()-referenced tokens (gradients, shadows, text/border
+ * colors) live in :root for use in arbitrary classes like bg-[var(--color-bg)].
+ * ========================================================================== */
+@theme {
+  --color-cream: #f9f7f4;
+  --color-cream-subtle: #f4f2ef;
+  --color-accent: #4338ca;
+  --color-accent-light: #eef2ff;
+  --color-accent-hover: #3730a3;
+
+  --font-display: var(--font-jakarta), "Helvetica Neue", sans-serif;
+  --font-serif: var(--font-lora), Georgia, serif;
+  --font-body: var(--font-jakarta), system-ui, sans-serif;
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.05);
+  --shadow-card-hover: 0 4px 24px rgba(0, 0, 0, 0.1), 0 1px 4px rgba(0, 0, 0, 0.06);
+  --shadow-product: 0 24px 80px rgba(0, 0, 0, 0.12), 0 4px 16px rgba(0, 0, 0, 0.06);
+  --shadow-button-brand: 0 2px 8px rgba(67, 56, 202, 0.3);
+
+  --animate-fade-up: fadeUp 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-fade-in: fadeIn 0.4s ease-out forwards;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-marquee: marquee 28s linear infinite;
+}
+
+:root {
+  --color-bg: #f9f7f4;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f4f2ef;
+  --color-overlay: rgba(249, 247, 244, 0.9);
+
+  --color-text-primary: #0a0a0a;
+  --color-text-secondary: #525252;
+  --color-text-muted: #a3a3a3;
+
+  /* Deep indigo used for large dark surfaces (dark cards / mock "screen" panels)
+   * instead of near-black, so they sit in the indigo brand palette. */
+  --color-ink: #1e1b4b;
+  --color-ink-soft: #312e81;
+
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-border-strong: rgba(0, 0, 0, 0.15);
+
+  --gradient-mesh: radial-gradient(ellipse 800px 500px at 20% -10%, rgba(99, 102, 241, 0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 600px 400px at 80% 110%, rgba(167, 139, 250, 0.1) 0%, transparent 60%),
+    radial-gradient(ellipse 500px 300px at 50% 50%, rgba(67, 56, 202, 0.04) 0%, transparent 70%);
+  --gradient-cta: linear-gradient(135deg, #4338ca 0%, #6366f1 50%, #818cf8 100%);
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes waveform {
+  from {
+    transform: scaleY(0.35);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes personaCycle {
+  0%,
+  28% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  33%,
+  100% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
 /*
  * The marketing pages are styled entirely with Tailwind utilities. The rules
  * below preserve the original Phase-1 auth pages (/login, /auth/callback),

@@ -2,6 +2,16 @@ appId: com.meetcopilot.desktop
 productName: MeetCopilot
 directories:
   output: release
+# Stable, version-less installer name so the website's "Download for Windows" URL
+# (GitHub releases/latest/download/MeetCopilot-Setup.exe) never changes between
+# releases. electron-updater reads the exact name from the generated latest.yml.
+artifactName: MeetCopilot-Setup.exe
+# Update feed: publishing a GitHub Release (installer + latest.yml + blockmap) lets
+# electron-updater upgrade installed apps. Used by the `release` npm script.
+publish:
+  provider: github
+  owner: Devkolsawala
+  repo: AI-Meeting-Assistant
 # The renderer loads an AudioWorklet by URL; serving app files from disk (no asar)
 # avoids archive edge cases for that and keeps packaging simple.
 asar: false

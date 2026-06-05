@@ -29,6 +29,11 @@ const api: MeetCopilotApi = {
   },
   openUpgrade: () => ipcRenderer.send(IpcChannel.OpenUpgrade),
   reportError: (message: string) => ipcRenderer.send(IpcChannel.TelemetryError, message),
+  onboarding: {
+    getState: () => ipcRenderer.invoke(IpcChannel.OnboardingGetState),
+    complete: () => ipcRenderer.invoke(IpcChannel.OnboardingComplete),
+  },
+  openTroubleshooting: () => ipcRenderer.send(IpcChannel.OpenTroubleshooting),
   infer: {
     run: (context: InferContextLine[]) => ipcRenderer.invoke(IpcChannel.InferRun, context),
     onDelta: (handler) => {

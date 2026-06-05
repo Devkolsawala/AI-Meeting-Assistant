@@ -24,6 +24,15 @@ const upgradeBannerEl = document.getElementById("upgrade-banner");
 const upgradeTextEl = document.getElementById("upgrade-text");
 const upgradeBtn = document.getElementById("upgrade-btn");
 const upgradeDismissBtn = document.getElementById("upgrade-dismiss");
+const onboardingEl = document.getElementById("onboarding");
+const obMicBtn = document.getElementById("ob-mic-btn");
+const obMicDot = document.getElementById("ob-mic-dot");
+const obMicMsg = document.getElementById("ob-mic-msg");
+const obSysBtn = document.getElementById("ob-sys-btn");
+const obSysDot = document.getElementById("ob-sys-dot");
+const obSysMsg = document.getElementById("ob-sys-msg");
+const obHelpBtn = document.getElementById("ob-help");
+const obFinishBtn = document.getElementById("ob-finish");
 
 const api = window.meetcopilot;
 const audioRmsThreshold = 0.01;
@@ -273,6 +282,77 @@ async function getDeepgramToken(): Promise<{ accessToken: string; expiresInSecon
   return { accessToken: result.accessToken, expiresInSeconds: result.expiresInSeconds };
 }
 
+/** Sets a step's status dot + optional message in the onboarding wizard. */
+function setObStep(
+  dot: HTMLElement | null,
+  msgEl: HTMLElement | null,
+  state: "active" | "error",
+  message: string,
+): void {
+  if (dot) dot.dataset.state = state;
+  if (msgEl) {
+    msgEl.textContent = message;
+    msgEl.dataset.state = state === "active" ? "ok" : "";
+    msgEl.hidden = false;
+  }
+}
+
+/** Requests microphone access; a success here means capture's mic will work. */
+async function testMicPermission(): Promise<void> {
+  const button = asButton(obMicBtn);
+  if (button) button.disabled = true;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stopStreams([stream]);
+    setObStep(obMicDot, obMicMsg, "active", "Microphone is ready.");
+    if (button) button.textContent = "Microphone allowed";
+  } catch (err) {
+    setObStep(obMicDot, obMicMsg, "error", "Microphone blocked. Open Troubleshooting for steps.");
+    appendLog("Onboarding", `microphone permission failed: ${getErrorMessage(err)}`);
+    if (button) button.disabled = false;
+  }
+}
+
+/** Requests system-audio (loopback) capture; verifies an audio track is present. */
+async function testSystemAudioPermission(): Promise<void> {
+  const button = asButton(obSysBtn);
+  if (button) button.disabled = true;
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    const hasAudio = stream.getAudioTracks().length > 0;
+    stopStreams([stream]);
+    if (hasAudio) {
+      setObStep(obSysDot, obSysMsg, "active", "System audio is working.");
+      if (button) button.textContent = "System audio works";
+    } else {
+      setObStep(obSysDot, obSysMsg, "error", "No system audio detected. See Troubleshooting.");
+      if (button) button.disabled = false;
+    }
+  } catch (err) {
+    setObStep(obSysDot, obSysMsg, "error", "Couldn't capture system audio. See Troubleshooting.");
+    appendLog("Onboarding", `system audio test failed: ${getErrorMessage(err)}`);
+    if (button) button.disabled = false;
+  }
+}
+
+/** Persists completion and hides the wizard. */
+async function finishOnboarding(): Promise<void> {
+  await api.onboarding.complete();
+  if (onboardingEl) onboardingEl.hidden = true;
+}
+
+/** Shows the first-run wizard unless onboarding was already completed. */
+async function maybeShowOnboarding(): Promise<void> {
+  try {
+    const state = await api.onboarding.getState();
+    if (!state.completed && onboardingEl) {
+      onboardingEl.hidden = false;
+    }
+  } catch (err) {
+    appendLog("Onboarding", `state check failed: ${getErrorMessage(err)}`);
+  }
+}
+
 async function runAsk(): Promise<void> {
   if (isAsking) return;
   isAsking = true;
@@ -484,6 +564,10 @@ startCaptureBtn?.addEventListener("click", () => {
 stopCaptureBtn?.addEventListener("click", () => stopCapture());
 upgradeBtn?.addEventListener("click", () => api.openUpgrade());
 upgradeDismissBtn?.addEventListener("click", () => hideUpgrade());
+obMicBtn?.addEventListener("click", () => void testMicPermission());
+obSysBtn?.addEventListener("click", () => void testSystemAudioPermission());
+obHelpBtn?.addEventListener("click", () => api.openTroubleshooting());
+obFinishBtn?.addEventListener("click", () => void finishOnboarding());
 closeBtn?.addEventListener("click", () => {
   stopCapture();
   api.close();
@@ -502,3 +586,4 @@ updateCaptureStatus("You", "idle", "idle");
 updateCaptureStatus("Them", "idle", "idle");
 updateSttStatus("idle", `idle (${api.sttProvider})`);
 appendLog("Overlay", `renderer ready — STT provider: ${api.sttProvider}`);
+void maybeShowOnboarding();

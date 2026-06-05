@@ -10,6 +10,47 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <section id="onboarding" class="onboarding" hidden aria-label="First-run setup">
+      <div class="onboarding-card">
+        <h1 class="onboarding-title">Set up MeetCopilot</h1>
+        <p class="onboarding-sub">
+          MeetCopilot needs two audio sources. Grant them once to get started.
+        </p>
+
+        <div class="onboard-step">
+          <div class="onboard-step-head">
+            <span id="ob-mic-dot" class="status-dot" aria-hidden="true"></span>
+            <span class="onboard-step-title">Microphone ("You")</span>
+          </div>
+          <p class="onboard-step-desc">Lets MeetCopilot hear what you say.</p>
+          <div id="ob-mic-msg" class="onboard-msg" hidden></div>
+          <button id="ob-mic-btn" class="capture-btn capture-btn-primary" type="button">
+            Allow microphone
+          </button>
+        </div>
+
+        <div class="onboard-step">
+          <div class="onboard-step-head">
+            <span id="ob-sys-dot" class="status-dot" aria-hidden="true"></span>
+            <span class="onboard-step-title">System audio ("Them")</span>
+          </div>
+          <p class="onboard-step-desc">
+            Captures the meeting's audio. Allow screen capture when Windows asks.
+          </p>
+          <div id="ob-sys-msg" class="onboard-msg" hidden></div>
+          <button id="ob-sys-btn" class="capture-btn capture-btn-primary" type="button">
+            Test system audio
+          </button>
+        </div>
+
+        <div class="onboarding-actions">
+          <button id="ob-help" class="onboard-link" type="button">Troubleshooting</button>
+          <button id="ob-finish" class="capture-btn capture-btn-primary" type="button">
+            Finish setup
+          </button>
+        </div>
+      </div>
+    </section>
     <div class="overlay">
       <header class="titlebar">
         <span class="dot" aria-hidden="true"></span>

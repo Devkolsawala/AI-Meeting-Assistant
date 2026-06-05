@@ -12,12 +12,14 @@ import {
 } from "@meetcopilot/shared";
 import { AuthService } from "./auth/auth-service.js";
 import { PROTOCOL } from "./auth/config.js";
+import { initAutoUpdates } from "./auto-update.js";
 import { LimitReachedError, streamInfer } from "./infer/stream.js";
 import { captureError, captureEvent } from "./telemetry.js";
 import {
   type AuthStatus,
   IpcChannel,
   type InferRunResult,
+  type OnboardingState,
   type SessionStartResult,
   type StatusEntry,
   type SttTokenResult,
@@ -240,6 +242,30 @@ async function runInference(context: InferContextLine[]): Promise<InferRunResult
   }
 }
 
+/** Path to the persisted first-run onboarding state. */
+function onboardingPath(): string {
+  return path.join(app.getPath("userData"), "onboarding.json");
+}
+
+/** Reads onboarding state; defaults to not-completed (so first run shows the wizard). */
+function readOnboarding(): OnboardingState {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(onboardingPath(), "utf8")) as Partial<OnboardingState>;
+    return { completed: parsed.completed === true };
+  } catch {
+    return { completed: false };
+  }
+}
+
+/** Marks onboarding complete so the wizard does not show on future launches. */
+function completeOnboarding(): void {
+  try {
+    fs.writeFileSync(onboardingPath(), JSON.stringify({ completed: true }));
+  } catch (err) {
+    diag(`ONBOARDING save failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 /** Finds a meetcopilot:// deep link among process/relaunch arguments (Windows). */
 function findDeepLink(argv: readonly string[]): string | undefined {
   return argv.find((arg) => arg.startsWith(`${PROTOCOL}://`));
@@ -443,6 +469,13 @@ if (!hasSingleInstanceLock) {
       diag(`OPEN_UPGRADE failed: ${err instanceof Error ? err.message : String(err)}`);
     });
   });
+  ipcMain.handle(IpcChannel.OnboardingGetState, () => readOnboarding());
+  ipcMain.handle(IpcChannel.OnboardingComplete, () => completeOnboarding());
+  ipcMain.on(IpcChannel.OpenTroubleshooting, () => {
+    void electron.shell.openExternal(`${WEB_BASE}/help/windows-audio`).catch((err: unknown) => {
+      diag(`OPEN_TROUBLESHOOTING failed: ${err instanceof Error ? err.message : String(err)}`);
+    });
+  });
   ipcMain.handle(IpcChannel.InferRun, (_event, context: unknown) => {
     const lines = Array.isArray(context) ? context.filter(isContextLine) : [];
     return runInference(lines);
@@ -459,6 +492,7 @@ if (!hasSingleInstanceLock) {
       diag("app ready, creating overlay");
       configureCaptureSession();
       createWindow();
+      initAutoUpdates(app, diag);
       globalShortcut.register("CommandOrControl+Shift+Q", () => app.quit());
       globalShortcut.register(ASK_HOTKEY, () => {
         overlay?.webContents.send(IpcChannel.InferHotkey);

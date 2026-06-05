@@ -28,6 +28,12 @@ export const IpcChannel = {
   OpenUpgrade: "mc:open-upgrade",
   /** renderer -> main (send): report a renderer error for crash reporting. */
   TelemetryError: "mc:telemetry:error",
+  /** renderer -> main (invoke): read whether first-run onboarding is complete. */
+  OnboardingGetState: "mc:onboarding:get-state",
+  /** renderer -> main (invoke): mark first-run onboarding complete. */
+  OnboardingComplete: "mc:onboarding:complete",
+  /** renderer -> main (send): open the audio troubleshooting page in the browser. */
+  OpenTroubleshooting: "mc:open-troubleshooting",
   /** renderer -> main (invoke): run inference on the given labelled context. */
   InferRun: "mc:infer:run",
   /** main -> renderer: a streamed answer text delta. */
@@ -81,6 +87,12 @@ export interface SessionStartResult {
   usage?: UsageSnapshot;
 }
 
+/** First-run onboarding state. */
+export interface OnboardingState {
+  /** True once the user has completed (or skipped) the first-run setup. */
+  completed: boolean;
+}
+
 /** Result of minting a Deepgram STT token (authed + cap-gated by the backend). */
 export interface SttTokenResult {
   ok: boolean;
@@ -129,6 +141,15 @@ export interface MeetCopilotApi {
   openUpgrade: () => void;
   /** Forward a renderer error to the main process for crash reporting. */
   reportError: (message: string) => void;
+  /** First-run onboarding state, persisted by the main process. */
+  onboarding: {
+    /** Read whether onboarding has been completed. */
+    getState: () => Promise<OnboardingState>;
+    /** Mark onboarding complete so it does not show again. */
+    complete: () => Promise<void>;
+  };
+  /** Open the audio troubleshooting page in the system browser. */
+  openTroubleshooting: () => void;
   /** Streaming inference backed by the main process (authed backend call). */
   infer: {
     /** Run inference on the labelled context. Answer streams via onDelta. */
