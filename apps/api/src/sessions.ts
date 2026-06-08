@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import { APP_NAME, type InferLane } from "@meetcopilot/shared";
-import { AuthError } from "./auth.js";
+import { AuthError, authDisabled } from "./auth.js";
 import { getUsageSnapshot } from "./limits.js";
 import { limitReachedResponse, requireUserId } from "./route-helpers.js";
 import { captureEvent } from "./telemetry.js";
@@ -31,6 +31,11 @@ export async function handleSessionStart(c: Context): Promise<Response> {
     return limitReachedResponse(c, usage);
   }
 
+  // AUTH_DISABLED — testing mode: return a mock session id without a Supabase write.
+  if (authDisabled()) {
+    return c.json({ sessionId: `mock-${Date.now()}`, usage });
+  }
+
   const body = (await c.req.json().catch(() => ({}))) as { lane?: unknown };
   const sessionId = await createUsageSession({ userId, lane: parseLane(body.lane) });
   return c.json({ sessionId, usage });
@@ -51,6 +56,11 @@ export async function handleSessionEnd(c: Context): Promise<Response> {
   const body = (await c.req.json().catch(() => ({}))) as { sessionId?: unknown };
   if (typeof body.sessionId !== "string" || body.sessionId.length === 0) {
     return c.json({ error: "Missing sessionId" }, 400);
+  }
+
+  // AUTH_DISABLED — testing mode: nothing was persisted, so closing is a no-op.
+  if (authDisabled()) {
+    return c.json({ ok: true });
   }
 
   try {

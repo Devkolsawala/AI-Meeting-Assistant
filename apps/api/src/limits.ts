@@ -1,4 +1,5 @@
 import type { UsageLimits, UsageSnapshot } from "@meetcopilot/shared";
+import { authDisabled } from "./auth.js";
 import { restBase, serviceHeaders } from "./usage.js";
 
 // Server-side plan gating. Reads the user's plan (subscriptions) and lifetime
@@ -87,6 +88,18 @@ function isWarning(usage: { sessions: number; sttSeconds: number }, limits: Usag
  * `overLimit` blocks further usage; `warn` is the soft 80% threshold.
  */
 export async function getUsageSnapshot(userId: string): Promise<UsageSnapshot> {
+  // AUTH_DISABLED — testing mode: report unlimited usage (no Supabase reads, never
+  // over cap) so /infer and /stt-token work without a configured plan/subscription.
+  if (authDisabled()) {
+    return {
+      plan: "pro",
+      sessions: 0,
+      sttSeconds: 0,
+      limits: { maxSessions: null, maxSttSeconds: null },
+      overLimit: false,
+      warn: false,
+    };
+  }
   const [plan, usage] = await Promise.all([readPlan(userId), readUsage(userId)]);
   const limits = limitsForPlan(plan.active);
   const overLimit = isOverLimit(usage, limits);

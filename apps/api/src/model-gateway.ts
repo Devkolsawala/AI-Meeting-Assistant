@@ -98,7 +98,21 @@ export async function* streamWithFallback(
       throw err;
     }
     const message = err instanceof Error ? err.message : String(err);
+    // AWS Bedrock is an optional fallback. When AWS credentials are not configured
+    // (running Groq-only), skip it and surface the Groq error instead of failing on
+    // a Bedrock auth error — so deployments never need AWS.
+    if (!isBedrockConfigured()) {
+      console.error(`[LLM] Groq failed and AWS Bedrock is not configured; no fallback: ${message}`);
+      throw err;
+    }
     console.error(`[LLM] Groq failed, falling back to AWS Bedrock: ${message}`);
   }
   yield* streamInference(params);
+}
+
+/** True only when AWS credentials are present, so the Bedrock fallback can run. */
+function isBedrockConfigured(): boolean {
+  return Boolean(
+    process.env.AWS_ACCESS_KEY_ID?.trim() && process.env.AWS_SECRET_ACCESS_KEY?.trim(),
+  );
 }

@@ -8,6 +8,18 @@ export class AuthError extends Error {
   }
 }
 
+// AUTH_DISABLED — testing mode. When AUTH_DISABLED=true the API skips JWT
+// verification and plan gating, acting as a single mock user. Safe by default:
+// it is OFF unless the env var is explicitly set. Set it in .env (local) or the
+// host's env (e.g. Railway) to run the full pipeline without real sign-in.
+/** True when auth + usage gating are bypassed for testing. */
+export function authDisabled(): boolean {
+  return process.env.AUTH_DISABLED === "true";
+}
+
+/** Stable mock user id used for every request while AUTH_DISABLED is on. */
+export const MOCK_USER_ID = "00000000-0000-0000-0000-000000000001";
+
 /** The authenticated caller, extracted from a verified Supabase JWT. */
 export interface AuthedUser {
   userId: string;
