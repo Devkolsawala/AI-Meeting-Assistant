@@ -13,6 +13,7 @@
     "@aws-sdk/client-bedrock-runtime": "^3.726.0",
     "@hono/node-server": "^2.0.4",
     "@meetcopilot/shared": "workspace:*",
+    "groq-sdk": "^1.2.1",
     "hono": "^4.12.23",
     "jose": "^5.9.6",
     "ws": "^8.18.0"

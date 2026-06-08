@@ -3,6 +3,7 @@ import {
   ConverseStreamCommand,
 } from "@aws-sdk/client-bedrock-runtime";
 import type { InferLane } from "@meetcopilot/shared";
+import { streamGroq } from "./providers/groq.js";
 import type { TokenUsage } from "./usage.js";
 
 // LiteLLM-style routing done in-process: a lane maps to a Bedrock model id, and we
@@ -72,4 +73,32 @@ export async function* streamInference(
       });
     }
   }
+}
+
+/**
+ * Streams an answer with Groq as the primary provider and Bedrock as the fallback.
+ * Groq handles the request unless it throws *before emitting any tokens* (timeout,
+ * rate limit, API/auth error), in which case we log and replay the same request
+ * against Bedrock. If Groq fails mid-stream (after partial output) we re-throw
+ * rather than restart, since the client has already received those deltas.
+ * If both providers fail the error propagates to the caller (a 503 in /infer).
+ */
+export async function* streamWithFallback(
+  params: StreamInferenceParams,
+): AsyncGenerator<string, void, unknown> {
+  let emitted = 0;
+  try {
+    for await (const delta of streamGroq(params)) {
+      emitted++;
+      yield delta;
+    }
+    return;
+  } catch (err) {
+    if (emitted > 0) {
+      throw err;
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[LLM] Groq failed, falling back to AWS Bedrock: ${message}`);
+  }
+  yield* streamInference(params);
 }

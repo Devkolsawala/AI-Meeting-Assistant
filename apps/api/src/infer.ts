@@ -9,7 +9,7 @@ import {
 } from "@meetcopilot/shared";
 import { AuthError } from "./auth.js";
 import { getUsageSnapshot } from "./limits.js";
-import { type GatewayMessage, modelForLane, streamInference } from "./model-gateway.js";
+import { type GatewayMessage, modelForLane, streamWithFallback } from "./model-gateway.js";
 import { limitReachedResponse, requireUserId } from "./route-helpers.js";
 import { captureError, captureEvent, traceLlm } from "./telemetry.js";
 import { estimateCostUsd, recordInferenceEvent, type TokenUsage } from "./usage.js";
@@ -95,21 +95,44 @@ export async function handleInfer(c: Context): Promise<Response> {
   const model = modelForLane(lane);
   const sessionId = request.sessionId;
 
+  // Holder object: reading `.value` yields its declared union type, avoiding the
+  // compiler keeping the initialized `null` for a closure-assigned variable.
+  const tokenUsage = { value: null as TokenUsage | null };
+
+  // Groq primary, Bedrock fallback. Pull the first chunk *before* opening the SSE
+  // stream: a pre-first-token Groq failure transparently falls back to Bedrock
+  // inside the iterator, and only a both-providers failure throws here — letting us
+  // answer with a real 503 instead of HTTP 200 + an SSE error after headers commit.
+  const iterator = streamWithFallback({
+    system,
+    messages,
+    lane,
+    onUsage: (u) => {
+      tokenUsage.value = u;
+    },
+  });
+  let firstChunk: string | undefined;
+  try {
+    const first = await iterator.next();
+    if (!first.done) {
+      firstChunk = first.value;
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[${APP_NAME}] /infer: both LLM providers failed: ${message}`);
+    captureError(err, { route: "/infer", model });
+    return c.json({ error: "Both LLM providers failed" }, 503);
+  }
+
   return streamSSE(c, async (stream) => {
-    // Holder object: reading `usage.value` yields its declared union type, avoiding
-    // the compiler keeping the initialized `null` for a closure-assigned variable.
-    const usage = { value: null as TokenUsage | null };
     let answer = "";
     const startTime = new Date();
     try {
-      for await (const delta of streamInference({
-        system,
-        messages,
-        lane,
-        onUsage: (u) => {
-          usage.value = u;
-        },
-      })) {
+      if (firstChunk !== undefined) {
+        answer += firstChunk;
+        await stream.writeSSE({ data: JSON.stringify({ delta: firstChunk }) });
+      }
+      for await (const delta of { [Symbol.asyncIterator]: () => iterator }) {
         answer += delta;
         await stream.writeSSE({ data: JSON.stringify({ delta }) });
       }
@@ -121,7 +144,7 @@ export async function handleInfer(c: Context): Promise<Response> {
       await stream.writeSSE({ event: "error", data: JSON.stringify({ error: message }) });
     }
 
-    const finalUsage = usage.value;
+    const finalUsage = tokenUsage.value;
 
     // Trace the LLM call (cost + latency) in Langfuse.
     if (finalUsage) {

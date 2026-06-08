@@ -34,6 +34,9 @@ const {
   session,
   desktopCapturer,
   webContents,
+  Tray,
+  Menu,
+  nativeImage,
 } = electron;
 
 app.setName(APP_NAME);
@@ -51,10 +54,66 @@ try {
 /** The single overlay window. Kept at module scope so lifecycle handlers can reach it. */
 let overlay: Electron.BrowserWindow | null = null;
 
+/** The system tray icon. Kept at module scope so it is not garbage-collected. */
+let tray: Electron.Tray | null = null;
+
+/**
+ * 16x16 indigo circle tray icon, embedded as a base64 PNG. Inlined rather than
+ * shipped as an asset file so it survives the esbuild bundle without a separate
+ * copy step (packaged builds bundle main.ts; loose assets are a known foot-gun).
+ */
+const TRAY_ICON_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAa0lEQVR4nGNgoDZwtjgl52xxqtPZ4tRlZ4tTv6D4MlRMjpDmFKiG/zgwSC4Fn2ZcGtFxCrpmOQI2Y3OJHLIBnSRohuFOZAMuk2HAZWQDSHE+3BtUNYBiL1AciJRFI8UJiSpJGc075GUmcgAA3yl0gDuVt5gAAAAASUVORK5CYII=";
+
+/**
+ * Creates the system tray icon with a Show Window / Quit context menu. The overlay
+ * is frameless and skips the taskbar, so the tray is the user's reliable way back
+ * to the window and out of the app.
+ */
+function createTray(): void {
+  const icon = nativeImage.createFromDataURL(TRAY_ICON_DATA_URL);
+  tray = new Tray(icon);
+  tray.setToolTip(APP_NAME);
+  const menu = Menu.buildFromTemplate([
+    {
+      label: "Show Window",
+      click: () => {
+        if (!overlay) {
+          createWindow();
+          return;
+        }
+        if (overlay.isMinimized()) overlay.restore();
+        overlay.show();
+        overlay.focus();
+      },
+    },
+    { type: "separator" },
+    { label: `Quit ${APP_NAME}`, click: () => app.quit() },
+  ]);
+  tray.setContextMenu(menu);
+  // Single-click the tray icon to bring the overlay forward (Windows convention).
+  tray.on("click", () => {
+    if (!overlay) {
+      createWindow();
+      return;
+    }
+    if (overlay.isMinimized()) overlay.restore();
+    overlay.show();
+    overlay.focus();
+  });
+}
+
 /** Auth (PKCE + safeStorage). Pushes status changes to the overlay renderer. */
 const authService = new AuthService((status: AuthStatus) => {
   overlay?.webContents.send(IpcChannel.AuthChanged, status);
 });
+
+// AUTH_DISABLED — testing mode, comment back in for production. Search the codebase
+// for "AUTH_DISABLED" to re-enable authentication. Injects a mock signed-in user so
+// the overlay behaves as a Pro account without a real Supabase login.
+// Full mock identity used during testing:
+//   { id: "test-user-001", email: "test@meetcopilot.dev", name: "Test User", plan: "pro" }
+const MOCK_AUTH_STATUS: AuthStatus = { signedIn: true, email: "test@meetcopilot.dev" };
 
 /** Backend base URL for inference + STT token. */
 const API_BASE = (process.env.API_URL?.trim() || "http://127.0.0.1:8787").replace(/\/+$/, "");
@@ -115,9 +174,13 @@ let currentSessionId: string | null = null;
  */
 async function startUsageSession(): Promise<SessionStartResult> {
   const accessToken = await authService.getValidAccessToken();
+  // AUTH_DISABLED — testing mode: skip the sign-in requirement so capture can start
+  // without a login. Re-enable for production.
+  /*
   if (!accessToken) {
     return { ok: false, error: "Sign in to start a session." };
   }
+  */
   try {
     const res = await fetch(`${API_BASE}/session/start`, {
       method: "POST",
@@ -149,9 +212,12 @@ async function startUsageSession(): Promise<SessionStartResult> {
  */
 async function mintSttToken(): Promise<SttTokenResult> {
   const accessToken = await authService.getValidAccessToken();
+  // AUTH_DISABLED — testing mode: skip the sign-in requirement. Re-enable for production.
+  /*
   if (!accessToken) {
     return { ok: false, error: "Sign in to start transcription." };
   }
+  */
   try {
     const res = await fetch(`${API_BASE}/stt-token`, {
       method: "POST",
@@ -204,9 +270,12 @@ function isContextLine(value: unknown): value is InferContextLine {
 /** Runs one inference stream, forwarding deltas/done/error to the overlay. */
 async function runInference(context: InferContextLine[]): Promise<InferRunResult> {
   const accessToken = await authService.getValidAccessToken();
+  // AUTH_DISABLED — testing mode: skip the sign-in requirement. Re-enable for production.
+  /*
   if (!accessToken) {
     return { ok: false, error: "Sign in before asking MeetCopilot." };
   }
+  */
   if (context.length === 0) {
     return { ok: false, error: "No transcript yet — start capture and speak first." };
   }
@@ -218,7 +287,9 @@ async function runInference(context: InferContextLine[]): Promise<InferRunResult
   try {
     await streamInfer({
       apiBase: API_BASE,
-      accessToken,
+      // AUTH_DISABLED — testing mode: with the sign-in gate off there may be no token.
+      // Coerce to "" to satisfy the type; re-enabling auth restores a real token.
+      accessToken: accessToken ?? "",
       context,
       persona: DEFAULT_PERSONA_KEY,
       sessionId: currentSessionId ?? undefined,
@@ -414,9 +485,13 @@ function createWindow(): void {
       overlay?.webContents.send(IpcChannel.Log, entry);
     }
     diag("WINDOW_READY content-protection=ON");
+    // AUTH_DISABLED — testing mode: push the mock signed-in status to the overlay.
+    overlay?.webContents.send(IpcChannel.AuthChanged, MOCK_AUTH_STATUS);
+    /*
     void authService.getStatus().then((status) => {
       overlay?.webContents.send(IpcChannel.AuthChanged, status);
     });
+    */
   });
 
   void overlay.loadFile(path.join(__dirname, "renderer", "index.html"));
@@ -455,7 +530,9 @@ if (!hasSingleInstanceLock) {
 
   ipcMain.handle(IpcChannel.AuthLogin, () => authService.beginLogin());
   ipcMain.handle(IpcChannel.AuthLogout, () => authService.logout());
-  ipcMain.handle(IpcChannel.AuthGetStatus, () => authService.getStatus());
+  // AUTH_DISABLED — testing mode: report the mock signed-in user to the renderer.
+  ipcMain.handle(IpcChannel.AuthGetStatus, () => MOCK_AUTH_STATUS);
+  // ipcMain.handle(IpcChannel.AuthGetStatus, () => authService.getStatus());
   ipcMain.handle(IpcChannel.SessionStart, () => startUsageSession());
   ipcMain.handle(IpcChannel.SessionEnd, () => endUsageSession());
   ipcMain.handle(IpcChannel.SttToken, () => mintSttToken());
@@ -492,6 +569,7 @@ if (!hasSingleInstanceLock) {
       diag("app ready, creating overlay");
       configureCaptureSession();
       createWindow();
+      createTray();
       initAutoUpdates(app, diag);
       globalShortcut.register("CommandOrControl+Shift+Q", () => app.quit());
       globalShortcut.register(ASK_HOTKEY, () => {

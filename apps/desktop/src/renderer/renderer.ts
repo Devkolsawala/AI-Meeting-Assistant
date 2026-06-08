@@ -9,6 +9,7 @@ import { createSttAdapter } from "./stt/factory.js";
 
 const logEl = document.getElementById("log");
 const labelEl = document.getElementById("app-label");
+const recDotEl = document.getElementById("rec-dot");
 const closeBtn = document.getElementById("close-btn");
 const startCaptureBtn = document.getElementById("start-capture-btn");
 const stopCaptureBtn = document.getElementById("stop-capture-btn");
@@ -100,6 +101,8 @@ function setCaptureControls(): void {
   const stopButton = asButton(stopCaptureBtn);
   if (startButton) startButton.disabled = isStartingCapture || capture !== null;
   if (stopButton) stopButton.disabled = capture === null;
+  // Title-bar status dot: pulsing green while a capture session is live, grey idle.
+  if (recDotEl) recDotEl.dataset.state = capture !== null ? "recording" : "";
 }
 
 function updateCaptureStatus(side: CaptureSide, status: CaptureStatus, text: string): void {
@@ -202,6 +205,8 @@ function toCaptureSide(speaker: SttTranscriptEvent["speaker"]): CaptureSide {
 function setTranscriptLineText(line: HTMLElement, side: CaptureSide, transcript: string): void {
   const label = document.createElement("span");
   label.className = "transcript-speaker";
+  // Presentational hook so CSS can colour "Them:" (indigo) vs "You:" (emerald).
+  label.dataset.side = side;
   label.textContent = `${side}:`;
 
   const text = document.createElement("span");
@@ -571,6 +576,11 @@ obFinishBtn?.addEventListener("click", () => void finishOnboarding());
 closeBtn?.addEventListener("click", () => {
   stopCapture();
   api.close();
+});
+// AUTH_DISABLED — testing-mode banner dismiss. Remove with the banner before release.
+document.getElementById("testing-dismiss")?.addEventListener("click", () => {
+  const banner = document.getElementById("testing-banner");
+  if (banner) banner.hidden = true;
 });
 window.addEventListener("beforeunload", () => stopCapture());
 

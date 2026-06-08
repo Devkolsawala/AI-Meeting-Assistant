@@ -53,13 +53,20 @@
     </section>
     <div class="overlay">
       <header class="titlebar">
-        <span class="dot" aria-hidden="true"></span>
+        <span id="rec-dot" class="dot" aria-hidden="true"></span>
         <span id="app-label" class="title">MeetCopilot</span>
         <span class="badge">overlay spike</span>
         <button id="close-btn" class="close" title="Quit (Ctrl+Shift+Q)" aria-label="Quit">
           &#10005;
         </button>
       </header>
+      <!-- AUTH_DISABLED — testing-mode banner. Remove (and re-enable auth) before release. -->
+      <section id="testing-banner" class="testing-banner" aria-live="polite">
+        <span class="testing-text">&#9888; Testing Mode — Auth disabled. Remove before release.</span>
+        <button id="testing-dismiss" class="testing-dismiss" type="button" aria-label="Dismiss">
+          &#10005;
+        </button>
+      </section>
       <section class="account" aria-label="Account">
         <div class="account-row">
           <span id="auth-dot" class="status-dot" aria-hidden="true"></span>
@@ -110,7 +117,7 @@
       </section>
       <section class="answer" aria-label="AI answer">
         <div class="answer-header">
-          <span>Answer</span>
+          <span class="answer-label">AI Answer</span>
           <button id="ask-btn" class="capture-btn capture-btn-primary" type="button">
             Ask (Ctrl+Enter)
           </button>
