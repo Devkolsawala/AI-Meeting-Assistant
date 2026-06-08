@@ -159,6 +159,13 @@ body {
   border-radius: 12px;
 }
 
+/* The `display: flex` above overrides the UA [hidden] rule, so the hidden
+   attribute alone can't dismiss the panel. This higher-specificity rule lets
+   `el.hidden = true` actually hide it (fixes the stuck "Finish setup" screen). */
+.onboarding[hidden] {
+  display: none;
+}
+
 .onboarding-card {
   display: flex;
   flex-direction: column;
@@ -252,6 +259,11 @@ body {
 .upgrade-banner[data-state="limit"] {
   color: #9b1c1c;
   background: #fdeaea;
+}
+
+/* Same fix as .onboarding: let the hidden attribute win over `display: flex`. */
+.upgrade-banner[hidden] {
+  display: none;
 }
 
 .upgrade-text {
