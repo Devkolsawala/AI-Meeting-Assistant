@@ -34,6 +34,10 @@ const obSysDot = document.getElementById("ob-sys-dot");
 const obSysMsg = document.getElementById("ob-sys-msg");
 const obHelpBtn = document.getElementById("ob-help");
 const obFinishBtn = document.getElementById("ob-finish");
+const obCloseBtn = document.getElementById("ob-close");
+const micBannerEl = document.getElementById("mic-banner");
+const micBannerHelpBtn = document.getElementById("mic-banner-help");
+const micBannerDismissBtn = document.getElementById("mic-banner-dismiss");
 
 const api = window.meetcopilot;
 const audioRmsThreshold = 0.01;
@@ -44,6 +48,8 @@ const maxContextLines = 40;
 /** Finalised transcript lines, labelled, sent to /infer when the user asks. */
 const transcriptContext: InferContextLine[] = [];
 let isAsking = false;
+/** Whether the microphone has been confirmed working (onboarding test or capture). */
+let micReady = false;
 
 type CaptureSide = "You" | "Them";
 type CaptureStatus = "idle" | "pending" | "active" | "error";
@@ -302,6 +308,22 @@ function setObStep(
   }
 }
 
+/** Shows the dismissible "microphone not enabled" banner in the main overlay. */
+function showMicBanner(): void {
+  if (micBannerEl) micBannerEl.hidden = false;
+}
+
+/** Hides the "microphone not enabled" banner. */
+function hideMicBanner(): void {
+  if (micBannerEl) micBannerEl.hidden = true;
+}
+
+/** Marks the mic as confirmed working and clears the not-enabled banner. */
+function markMicReady(): void {
+  micReady = true;
+  hideMicBanner();
+}
+
 /** Requests microphone access; a success here means capture's mic will work. */
 async function testMicPermission(): Promise<void> {
   const button = asButton(obMicBtn);
@@ -309,6 +331,7 @@ async function testMicPermission(): Promise<void> {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     stopStreams([stream]);
+    markMicReady();
     setObStep(obMicDot, obMicMsg, "active", "Microphone is ready.");
     if (button) button.textContent = "Microphone allowed";
   } catch (err) {
@@ -340,10 +363,17 @@ async function testSystemAudioPermission(): Promise<void> {
   }
 }
 
-/** Persists completion and hides the wizard. */
+/**
+ * Persists completion and hides the wizard. The microphone is optional: the user
+ * can always proceed, and if the mic was never confirmed working we surface a
+ * dismissible reminder in the main UI instead of blocking them in setup.
+ */
 async function finishOnboarding(): Promise<void> {
   await api.onboarding.complete();
   if (onboardingEl) onboardingEl.hidden = true;
+  if (!micReady) {
+    showMicBanner();
+  }
 }
 
 /** Shows the first-run wizard unless onboarding was already completed. */
@@ -463,6 +493,8 @@ async function startCapture(): Promise<void> {
     appendLog("Capture", "starting microphone and system loopback");
     micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     logStreamReady("You", micStream);
+    // Mic is live for this capture — clear any "mic not enabled" reminder.
+    markMicReady();
 
     displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
     systemAudioStream = new MediaStream(requireAudioTracks("Them", displayStream));
@@ -573,6 +605,10 @@ obMicBtn?.addEventListener("click", () => void testMicPermission());
 obSysBtn?.addEventListener("click", () => void testSystemAudioPermission());
 obHelpBtn?.addEventListener("click", () => api.openTroubleshooting());
 obFinishBtn?.addEventListener("click", () => void finishOnboarding());
+// Close (X) skips setup and proceeds into the app, exactly like Finish.
+obCloseBtn?.addEventListener("click", () => void finishOnboarding());
+micBannerHelpBtn?.addEventListener("click", () => api.openTroubleshooting());
+micBannerDismissBtn?.addEventListener("click", () => hideMicBanner());
 closeBtn?.addEventListener("click", () => {
   stopCapture();
   api.close();

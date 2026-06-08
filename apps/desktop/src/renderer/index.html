@@ -12,17 +12,25 @@
   <body>
     <section id="onboarding" class="onboarding" hidden aria-label="First-run setup">
       <div class="onboarding-card">
-        <h1 class="onboarding-title">Set up MeetCopilot</h1>
+        <div class="onboarding-head">
+          <h1 class="onboarding-title">Set up MeetCopilot</h1>
+          <button id="ob-close" class="onboard-close" type="button" title="Skip setup" aria-label="Close setup">
+            &#10005;
+          </button>
+        </div>
         <p class="onboarding-sub">
-          MeetCopilot needs two audio sources. Grant them once to get started.
+          MeetCopilot works best with two audio sources. Grant them now, or skip and
+          continue — you can enable them later.
         </p>
 
         <div class="onboard-step">
           <div class="onboard-step-head">
             <span id="ob-mic-dot" class="status-dot" aria-hidden="true"></span>
-            <span class="onboard-step-title">Microphone ("You")</span>
+            <span class="onboard-step-title">Microphone ("You") — optional</span>
           </div>
-          <p class="onboard-step-desc">Lets MeetCopilot hear what you say.</p>
+          <p class="onboard-step-desc">
+            Lets MeetCopilot hear what you say. You can continue without it.
+          </p>
           <div id="ob-mic-msg" class="onboard-msg" hidden></div>
           <button id="ob-mic-btn" class="capture-btn capture-btn-primary" type="button">
             Allow microphone
@@ -86,6 +94,17 @@
             Upgrade
           </button>
           <button id="upgrade-dismiss" class="upgrade-dismiss" type="button" aria-label="Dismiss">
+            &#10005;
+          </button>
+        </span>
+      </section>
+      <section id="mic-banner" class="mic-banner" aria-live="polite" hidden>
+        <span class="mic-banner-text">
+          &#9888; Microphone not enabled — MeetCopilot can't hear you ("You") until you allow mic access.
+        </span>
+        <span class="mic-banner-actions">
+          <button id="mic-banner-help" class="capture-btn" type="button">Troubleshooting</button>
+          <button id="mic-banner-dismiss" class="mic-banner-dismiss" type="button" aria-label="Dismiss">
             &#10005;
           </button>
         </span>
