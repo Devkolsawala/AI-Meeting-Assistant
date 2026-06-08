@@ -35,6 +35,11 @@ export type {
   SpeechToTextAdapter,
   SttTranscriptEvent,
   SttTranscriptHandler,
+  SttTurnSignalEvent,
+  SttTurnSignalHandler,
+  SttTurnSignalKind,
+  TurnCompleteResponse,
+  TurnCompleteSource,
   UsageLimits,
   UsageSnapshot,
 } from "./types.js";

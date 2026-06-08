@@ -11,6 +11,7 @@ import { limitReachedResponse, requireUserId } from "./route-helpers.js";
 import { attachSarvamProxy, SARVAM_PROXY_PATH } from "./sarvam-proxy.js";
 import { handleSessionEnd, handleSessionStart } from "./sessions.js";
 import { captureError, captureEvent } from "./telemetry.js";
+import { handleTurnComplete } from "./turn-complete.js";
 import { mintDeepgramToken, mintElevenLabsToken, UpstreamError } from "./tokens.js";
 
 loadEnv();
@@ -78,6 +79,9 @@ app.post("/session/end", handleSessionEnd);
 // Authenticated streaming inference (SSE).
 app.post("/infer", handleInfer);
 
+// Authenticated end-of-turn completeness classifier (Layer 2 of the turn gate).
+app.post("/turn/complete", handleTurnComplete);
+
 app.onError((err, c) => {
   if (err instanceof UpstreamError) {
     console.error(`[${APP_NAME}] ${err.provider} upstream error ${err.status}: ${err.detail}`);
@@ -99,6 +103,7 @@ const server = serve({ fetch: app.fetch, hostname: HOST, port: PORT }, (info) =>
   console.log("  GET  /usage     (auth + plan/usage snapshot)");
   console.log("  POST /session/start | /session/end (auth + usage metering)");
   console.log("  POST /infer     (auth + Bedrock SSE)");
+  console.log("  POST /turn/complete (auth + Groq end-of-turn classifier)");
   console.log("  GET  /token/deepgram");
   console.log("  GET  /token/elevenlabs");
   console.log(`  WS   ${SARVAM_PROXY_PATH} (Sarvam saaras:v3 proxy)`);

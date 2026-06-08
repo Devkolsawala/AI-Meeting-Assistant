@@ -3,6 +3,8 @@ import type {
   SpeechToTextAdapter,
   SttTranscriptEvent,
   SttTranscriptHandler,
+  SttTurnSignalEvent,
+  SttTurnSignalHandler,
 } from "@meetcopilot/shared";
 
 const DEEPGRAM_LISTEN_URL = "wss://api.deepgram.com/v1/listen";
@@ -78,11 +80,26 @@ function getTranscript(payload: JsonRecord): string | null {
   return transcript ? transcript : null;
 }
 
+// Results messages carry the channel in `channel_index` ([index, total]).
 function getSpeaker(payload: JsonRecord): SpeakerChannel | null {
   const channelIndex = payload.channel_index;
   if (!Array.isArray(channelIndex)) return null;
 
   const sourceChannel = channelIndex[0];
+  if (sourceChannel === 0) return "you";
+  if (sourceChannel === 1) return "them";
+  return null;
+}
+
+// UtteranceEnd / SpeechStarted messages carry the channel in `channel` ([index, total]),
+// NOT `channel_index`. Kept as a SEPARATE helper on purpose: getting the index source
+// wrong per message type would gate the turn on the wrong speaker. Mapping matches
+// getSpeaker: 0 = "you" (mic), 1 = "them" (system audio).
+function getSignalSpeaker(payload: JsonRecord): SpeakerChannel | null {
+  const channel = payload.channel;
+  if (!Array.isArray(channel)) return null;
+
+  const sourceChannel = channel[0];
   if (sourceChannel === 0) return "you";
   if (sourceChannel === 1) return "them";
   return null;
@@ -109,6 +126,7 @@ function disconnectNode(node: AudioNode | null): void {
 export class DeepgramSttAdapter implements SpeechToTextAdapter {
   private readonly partialHandlers = new Set<SttTranscriptHandler>();
   private readonly finalHandlers = new Set<SttTranscriptHandler>();
+  private readonly turnSignalHandlers = new Set<SttTurnSignalHandler>();
 
   private audioContext: AudioContext | null = null;
   private micSource: MediaStreamAudioSourceNode | null = null;
@@ -149,6 +167,11 @@ export class DeepgramSttAdapter implements SpeechToTextAdapter {
   public onFinal(handler: SttTranscriptHandler): () => void {
     this.finalHandlers.add(handler);
     return () => this.finalHandlers.delete(handler);
+  }
+
+  public onTurnSignal(handler: SttTurnSignalHandler): () => void {
+    this.turnSignalHandlers.add(handler);
+    return () => this.turnSignalHandlers.delete(handler);
   }
 
   public async stop(): Promise<void> {
@@ -325,10 +348,25 @@ export class DeepgramSttAdapter implements SpeechToTextAdapter {
     url.searchParams.set("encoding", "linear16");
     url.searchParams.set("sample_rate", String(TARGET_SAMPLE_RATE));
     url.searchParams.set("channels", String(CHANNEL_COUNT));
+    // Single multichannel socket: ch0 = "you" (mic), ch1 = "them" (system audio).
+    // The turn-detection params below apply connection-wide, but Deepgram tags
+    // is_final / speech_final / UtteranceEnd events with channel_index, so the
+    // turn detector can still gate on the "them" channel only.
     url.searchParams.set("multichannel", "true");
+    // interim_results: live (unstable) partials for the transcript UI ONLY.
+    // Never use interim results to trigger inference (see handleSocketMessage).
     url.searchParams.set("interim_results", "true");
     url.searchParams.set("punctuate", "true");
+    // smart_format: yields "?" and sentence punctuation that the completeness
+    // gate (Part C) keys off of.
     url.searchParams.set("smart_format", "true");
+    // endpointing: ms of silence before Deepgram marks an interim as speech_final.
+    url.searchParams.set("endpointing", "300");
+    // utterance_end_ms: silence after which Deepgram emits an UtteranceEnd
+    // message (requires interim_results=true) — our end-of-turn candidate signal.
+    url.searchParams.set("utterance_end_ms", "1000");
+    // vad_events: emit SpeechStarted events for voice-activity awareness.
+    url.searchParams.set("vad_events", "true");
     return url.toString();
   }
 
@@ -368,6 +406,17 @@ export class DeepgramSttAdapter implements SpeechToTextAdapter {
       this.log("Deepgram", `metadata received request_id=${requestId}`);
       return;
     }
+    // UtteranceEnd / SpeechStarted are non-transcript turn signals (vad_events +
+    // utterance_end_ms). They are routed to turn-signal handlers, never to the
+    // transcript UI, and carry their channel in `channel` (see getSignalSpeaker).
+    if (type === "UtteranceEnd") {
+      this.handleUtteranceEnd(payload);
+      return;
+    }
+    if (type === "SpeechStarted") {
+      this.handleSpeechStarted(payload);
+      return;
+    }
     if (type !== "Results") return;
 
     const transcript = getTranscript(payload);
@@ -379,12 +428,18 @@ export class DeepgramSttAdapter implements SpeechToTextAdapter {
       return;
     }
 
+    // is_final=false  -> interim/partial: transcript UI display ONLY, never triggers inference.
+    // is_final=true   -> finalized segment: safe input for the turn detector (Part B).
+    // speech_final=true (only meaningful on a final) -> Deepgram detected end-of-speech
+    //   right after this segment: a candidate end-of-turn signal for the detector.
     const isFinal = readBoolean(payload, "is_final") ?? false;
+    const speechFinal = readBoolean(payload, "speech_final") ?? false;
     const event: SttTranscriptEvent = {
       provider: "deepgram",
       speaker,
       transcript,
       isFinal,
+      speechFinal: isFinal ? speechFinal : undefined,
       startSeconds: readNumber(payload, "start"),
       durationSeconds: readNumber(payload, "duration"),
     };
@@ -392,9 +447,48 @@ export class DeepgramSttAdapter implements SpeechToTextAdapter {
     this.emitTranscript(event);
   }
 
+  // UtteranceEnd: Deepgram saw utterance_end_ms of silence. last_word_end === -1 means
+  // there is no pending utterance (stale/duplicate); we forward the value and let the
+  // turn detector ignore it, keeping this adapter a thin signal pass-through.
+  private handleUtteranceEnd(payload: JsonRecord): void {
+    const speaker = getSignalSpeaker(payload);
+    if (!speaker) {
+      this.log("Deepgram error", "UtteranceEnd missing expected channel");
+      return;
+    }
+    const signal: SttTurnSignalEvent = {
+      provider: "deepgram",
+      kind: "utterance_end",
+      speaker,
+      lastWordEnd: readNumber(payload, "last_word_end"),
+    };
+    this.emitTurnSignal(signal);
+  }
+
+  // SpeechStarted (vad_events): voice activity began on a channel. Forwarded for
+  // completeness/awareness; the turn detector does not require it to fire.
+  private handleSpeechStarted(payload: JsonRecord): void {
+    const speaker = getSignalSpeaker(payload);
+    if (!speaker) {
+      this.log("Deepgram error", "SpeechStarted missing expected channel");
+      return;
+    }
+    this.emitTurnSignal({ provider: "deepgram", kind: "speech_started", speaker });
+  }
+
   private emitTranscript(event: SttTranscriptEvent): void {
     const handlers = event.isFinal ? this.finalHandlers : this.partialHandlers;
     for (const handler of handlers) {
+      try {
+        handler(event);
+      } catch (err: unknown) {
+        this.log("Deepgram handler error", getErrorMessage(err));
+      }
+    }
+  }
+
+  private emitTurnSignal(event: SttTurnSignalEvent): void {
+    for (const handler of this.turnSignalHandlers) {
       try {
         handler(event);
       } catch (err: unknown) {

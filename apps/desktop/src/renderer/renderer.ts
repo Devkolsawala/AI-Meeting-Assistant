@@ -6,6 +6,8 @@ import type {
 } from "@meetcopilot/shared";
 import { initAuthUi } from "./auth-ui.js";
 import { createSttAdapter } from "./stt/factory.js";
+import { createCompletenessGate } from "./turn/completenessGate.js";
+import { TurnDetector } from "./turn/turnDetector.js";
 
 const logEl = document.getElementById("log");
 const labelEl = document.getElementById("app-label");
@@ -70,6 +72,12 @@ interface CaptureState {
 
 let capture: CaptureState | null = null;
 let isStartingCapture = false;
+/**
+ * Semantic end-of-turn detector for the "them" channel (one per capture session). When
+ * it decides the other speaker finished a question, it fires inference via runAsk. This
+ * is the ONLY automatic trigger — there is no separate "question detected" path.
+ */
+let turnDetector: TurnDetector | null = null;
 const partialTranscriptLines = new Map<CaptureSide, HTMLElement>();
 
 function appendLog(label: string, value: string): void {
@@ -514,7 +522,39 @@ async function startCapture(): Promise<void> {
       getDeepgramToken,
       onLog: appendLog,
     });
-    sttUnsubscribe = [sttAdapter.onPartial(handleTranscript), sttAdapter.onFinal(handleTranscript)];
+    // Semantic turn detection: the gate (heuristic + Groq) decides when a them-utterance
+    // is complete; the detector fires runAsk once it settles. Interim results still drive
+    // the live transcript UI only (handleTranscript), never inference.
+    const gate = createCompletenessGate({
+      classify: (utterance) => api.turn.complete(utterance),
+      debug: api.turnDebug,
+      onLog: appendLog,
+    });
+    const detector = new TurnDetector({
+      gate,
+      onFire: () => void runAsk(),
+      debug: api.turnDebug,
+      onLog: appendLog,
+    });
+    turnDetector = detector;
+
+    const unsubscribers: Array<() => void> = [
+      sttAdapter.onPartial(handleTranscript),
+      sttAdapter.onFinal((event) => {
+        handleTranscript(event);
+        // Only the "them" channel drives end-of-turn detection (never "you").
+        if (event.speaker === "them") {
+          detector.handleThemFinal(event.transcript, event.speechFinal ?? false);
+        }
+      }),
+    ];
+    const unsubscribeTurnSignal = sttAdapter.onTurnSignal?.((signal) => {
+      if (signal.speaker === "them" && signal.kind === "utterance_end") {
+        detector.handleThemUtteranceEnd(signal.lastWordEnd);
+      }
+    });
+    if (unsubscribeTurnSignal) unsubscribers.push(unsubscribeTurnSignal);
+    sttUnsubscribe = unsubscribers;
     await sttAdapter.start();
     updateSttStatus("active", `${provider} live`);
 
@@ -545,6 +585,8 @@ async function startCapture(): Promise<void> {
     updateCaptureStatus("Them", "error", "error");
     updateSttStatus("error", message === "limit_reached" ? "limit reached" : "error");
     for (const unsubscribe of sttUnsubscribe) unsubscribe();
+    turnDetector?.reset();
+    turnDetector = null;
     await sttAdapter?.stop().catch((stopErr: unknown) => {
       appendLog("STT error", `failed to stop after error: ${getErrorMessage(stopErr)}`);
     });
@@ -564,6 +606,8 @@ function stopCapture(): void {
 
   const currentCapture = capture;
   capture = null;
+  turnDetector?.reset();
+  turnDetector = null;
   // Close the usage-metering session; the server derives total STT seconds from it.
   void api.session.end();
   for (const unsubscribe of currentCapture.sttUnsubscribe) unsubscribe();
@@ -593,7 +637,16 @@ initAuthUi(appendLog);
 
 api.infer.onDelta((text) => appendAnswer(text));
 api.infer.onError((error) => setAnswer(error, "error"));
-api.infer.onHotkey(() => void runAsk());
+// Manual override: force an immediate answer, bypassing the turn gate. During capture
+// this goes through the detector (so its buffer/state stay consistent); with no capture
+// active it falls back to a direct ask on whatever context exists.
+api.infer.onHotkey(() => {
+  if (turnDetector) {
+    turnDetector.forceFire();
+  } else {
+    void runAsk();
+  }
+});
 askBtn?.addEventListener("click", () => void runAsk());
 startCaptureBtn?.addEventListener("click", () => {
   void startCapture();

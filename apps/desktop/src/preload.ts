@@ -8,6 +8,7 @@ const { contextBridge, ipcRenderer } = electron;
 const api: MeetCopilotApi = {
   appName: APP_NAME,
   sttProvider: parseSttProvider(process.env.STT_PROVIDER),
+  turnDebug: process.env.TURN_DEBUG === "true",
   onLog: (handler) => {
     ipcRenderer.on(IpcChannel.Log, (_event, entry: StatusEntry) => handler(entry));
   },
@@ -48,6 +49,9 @@ const api: MeetCopilotApi = {
     onHotkey: (handler) => {
       ipcRenderer.on(IpcChannel.InferHotkey, () => handler());
     },
+  },
+  turn: {
+    complete: (utterance: string) => ipcRenderer.invoke(IpcChannel.TurnComplete, utterance),
   },
 };
 

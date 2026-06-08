@@ -1,4 +1,9 @@
-import type { InferContextLine, SttProvider, UsageSnapshot } from "@meetcopilot/shared";
+import type {
+  InferContextLine,
+  SttProvider,
+  TurnCompleteResponse,
+  UsageSnapshot,
+} from "@meetcopilot/shared";
 
 /**
  * IPC contract shared between the Electron main process, the preload bridge, and
@@ -44,6 +49,8 @@ export const IpcChannel = {
   InferError: "mc:infer:error",
   /** main -> renderer: the global "ask" hotkey was pressed. */
   InferHotkey: "mc:infer:hotkey",
+  /** renderer -> main (invoke): classify whether a them-utterance is complete (turn gate). */
+  TurnComplete: "mc:turn:complete",
 } as const;
 
 /** A single labelled line shown in the overlay's status/log area. */
@@ -110,6 +117,8 @@ export interface MeetCopilotApi {
   readonly appName: string;
   /** Active speech-to-text provider, selected via the STT_PROVIDER env var. */
   readonly sttProvider: SttProvider;
+  /** When true (TURN_DEBUG env), the turn detector + gate log every state/decision. */
+  readonly turnDebug: boolean;
   /** Subscribe to status/log entries pushed from the main process. */
   onLog: (handler: (entry: StatusEntry) => void) => void;
   /** Ask the main process to quit the app. */
@@ -162,5 +171,15 @@ export interface MeetCopilotApi {
     onError: (handler: (error: string) => void) => void;
     /** Subscribe to the global "ask" hotkey being pressed. */
     onHotkey: (handler: () => void) => void;
+  };
+  /** End-of-turn detection helpers backed by the main process (authed backend call). */
+  turn: {
+    /**
+     * Layer 2 of the completeness gate: ask the backend whether `utterance` is a
+     * complete question/request. Fails open (complete=true) on timeout/error so the
+     * overlay never hangs waiting on this; the `source` field reports why. Called only
+     * for the ambiguous middle.
+     */
+    complete: (utterance: string) => Promise<TurnCompleteResponse>;
   };
 }

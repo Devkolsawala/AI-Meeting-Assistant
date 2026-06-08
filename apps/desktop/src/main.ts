@@ -8,6 +8,7 @@ import {
   type InferContextLine,
   type LimitReachedResponse,
   parseSttProvider,
+  type TurnCompleteResponse,
   type UsageSnapshot,
 } from "@meetcopilot/shared";
 import { AuthService } from "./auth/auth-service.js";
@@ -241,6 +242,47 @@ async function mintSttToken(): Promise<SttTokenResult> {
     return { ok: true, accessToken: data.accessToken, expiresInSeconds: data.expiresInSeconds };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Client budget for the end-of-turn classifier. This is the authoritative fail-open
+ * timeout: if the backend round-trip exceeds it, we abort and report complete so the
+ * overlay's turn detector never blocks. The detector runs the gate CONCURRENTLY with
+ * its 700ms settle window, so this budget is hidden under time we already wait — hence
+ * a generous 650ms default. Override via TURN_COMPLETE_TIMEOUT_MS.
+ */
+const TURN_COMPLETE_TIMEOUT_MS =
+  Number.parseInt(process.env.TURN_COMPLETE_TIMEOUT_MS ?? "", 10) || 650;
+
+/**
+ * Layer 2 of the turn-completeness gate. Asks the backend whether a them-utterance is
+ * a complete question/request. Routed through main so the Supabase token never reaches
+ * the renderer. Fails OPEN (complete=true) on timeout/error/non-OK — better to answer
+ * than to hang — and reports the source so TURN_DEBUG can show whether Layer 2 is live.
+ * The utterance is not logged here (privacy default).
+ */
+async function classifyTurnComplete(utterance: string): Promise<TurnCompleteResponse> {
+  const accessToken = await authService.getValidAccessToken();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TURN_COMPLETE_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${API_BASE}/turn/complete`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken ?? ""}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ utterance }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      return { complete: true, source: "error" };
+    }
+    const data = (await res.json()) as Partial<TurnCompleteResponse>;
+    return { complete: data.complete !== false, source: data.source ?? "groq" };
+  } catch {
+    // Distinguish our own timeout (the abort) from other network failures for debug.
+    return { complete: true, source: controller.signal.aborted ? "timeout" : "error" };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -561,6 +603,11 @@ if (!hasSingleInstanceLock) {
   ipcMain.handle(IpcChannel.InferRun, (_event, context: unknown) => {
     const lines = Array.isArray(context) ? context.filter(isContextLine) : [];
     return runInference(lines);
+  });
+  ipcMain.handle(IpcChannel.TurnComplete, (_event, utterance: unknown): Promise<TurnCompleteResponse> | TurnCompleteResponse => {
+    // Fail open on a bad payload too: an unusable utterance shouldn't stall the gate.
+    if (typeof utterance !== "string" || !utterance.trim()) return { complete: true, source: "error" };
+    return classifyTurnComplete(utterance);
   });
 
   app
