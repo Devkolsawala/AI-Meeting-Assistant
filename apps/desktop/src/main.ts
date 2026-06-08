@@ -115,8 +115,13 @@ const authService = new AuthService((status: AuthStatus) => {
 //   { id: "test-user-001", email: "test@meetcopilot.dev", name: "Test User", plan: "pro" }
 const MOCK_AUTH_STATUS: AuthStatus = { signedIn: true, email: "test@meetcopilot.dev" };
 
-/** Backend base URL for inference + STT token. */
-const API_BASE = (process.env.API_URL?.trim() || "http://127.0.0.1:8787").replace(/\/+$/, "");
+/**
+ * Backend base URL for inference + STT token. Packaged builds have no .env, so the
+ * default points at the deployed (Railway) backend; local dev overrides it via the
+ * API_URL env var (repo-root .env), e.g. http://127.0.0.1:8787.
+ */
+const DEFAULT_API_URL = "https://meetcopilotapi-production.up.railway.app";
+const API_BASE = (process.env.API_URL?.trim() || DEFAULT_API_URL).replace(/\/+$/, "");
 
 /** Web app base URL; the upgrade prompt opens its pricing section. */
 const WEB_BASE = (process.env.WEB_URL?.trim() || "http://localhost:3000").replace(/\/+$/, "");
