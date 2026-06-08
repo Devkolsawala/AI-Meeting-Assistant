@@ -1,0 +1,20 @@
+version: 1.0
+runtime: nodejs18
+build:
+  commands:
+    pre-build:
+      - npm install -g pnpm@11.5.1
+      - pnpm install --frozen-lockfile
+    build:
+      - pnpm turbo run build --filter @meetcopilot/api
+run:
+  command: node apps/api/dist/index.js
+  network:
+    port: 8080
+  env:
+    - name: NODE_ENV
+      value: production
+    - name: HOST
+      value: 0.0.0.0
+    - name: PORT
+      value: "8080"
